@@ -5,99 +5,176 @@ import numpy as np
 
 
 class DQN(nn.Module):
-
-    def __init__(self):
+    def __init__(self, state_dim, action_dim=5):
         super().__init__()
 
-        self.net = nn.Sequential(
-            nn.Linear(2, 64),
+        self.network = nn.Sequential(
+            nn.Linear(state_dim, 64),
             nn.ReLU(),
             nn.Linear(64, 64),
             nn.ReLU(),
-            nn.Linear(64, 5)
+            nn.Linear(64, action_dim)
         )
 
     def forward(self, x):
-        return self.net(x)
+        return self.network(x)
 
 
 class Agent:
+    def __init__(
+        self,
+        state_dim,
+        action_dim=5,
+        gamma=0.99,
+        epsilon=1.0,
+        epsilon_min=0.05,
+        epsilon_decay=0.995,
+        lr=1e-3
+    ):
+        self.state_dim = state_dim
+        self.action_dim = action_dim
 
-    def __init__(self):
+        self.gamma = gamma
+        self.epsilon = epsilon
+        self.epsilon_min = epsilon_min
+        self.epsilon_decay = epsilon_decay
 
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.device = torch.device(
+            "cuda" if torch.cuda.is_available() else "cpu"
+        )
 
-        self.q_net = DQN().to(self.device)
-        self.target_net = DQN().to(self.device)
+        self.q_net = DQN(
+            state_dim,
+            action_dim
+        ).to(self.device)
 
-        self.target_net.load_state_dict(self.q_net.state_dict())
+        self.target_net = DQN(
+            state_dim,
+            action_dim
+        ).to(self.device)
 
-        self.optimizer = optim.Adam(self.q_net.parameters(), lr=1e-3)
+        self.target_net.load_state_dict(
+            self.q_net.state_dict()
+        )
 
-        self.gamma = 0.99
-        self.epsilon = 1.0
-        self.epsilon_min = 0.05
-        self.epsilon_decay = 0.995
+        self.optimizer = optim.Adam(
+            self.q_net.parameters(),
+            lr=lr
+        )
+
+        self.loss_fn = nn.MSELoss()
 
     def select_action(self, state):
-
         if np.random.rand() < self.epsilon:
-            return np.random.randint(5)
+            return np.random.randint(self.action_dim)
 
-        state = torch.FloatTensor(state).to(self.device)
+        state_tensor = torch.tensor(
+            state,
+            dtype=torch.float32,
+            device=self.device
+        ).unsqueeze(0)
 
         with torch.no_grad():
-            q_values = self.q_net(state)
+            q_values = self.q_net(state_tensor)
 
-        return torch.argmax(q_values).item()
+        return q_values.argmax(dim=1).item()
 
-    def train(self, buffer, batch_size=32):
-
-        if len(buffer.buffer) < batch_size:
+    def train(self, replay_buffer, batch_size=32):
+        if len(replay_buffer) < batch_size:
             return
 
-        batch = buffer.sample(batch_size)
+        states, actions, rewards, next_states, dones = replay_buffer.sample(
+            batch_size
+        )
 
-        states, actions, rewards, next_states, dones = batch
+        states = torch.tensor(
+            states,
+            dtype=torch.float32,
+            device=self.device
+        )
 
-        states = torch.FloatTensor(states).to(self.device)
-        actions = torch.LongTensor(actions).to(self.device)
-        rewards = torch.FloatTensor(rewards).to(self.device)
-        next_states = torch.FloatTensor(next_states).to(self.device)
-        dones = torch.FloatTensor(dones).to(self.device)
+        actions = torch.tensor(
+            actions,
+            dtype=torch.long,
+            device=self.device
+        ).unsqueeze(1)
 
-        q_values = self.q_net(states).gather(1, actions.unsqueeze(1)).squeeze()
+        rewards = torch.tensor(
+            rewards,
+            dtype=torch.float32,
+            device=self.device
+        )
 
-        next_q = self.target_net(next_states).max(1)[0]
+        next_states = torch.tensor(
+            next_states,
+            dtype=torch.float32,
+            device=self.device
+        )
 
-        target = rewards + (1 - dones) * self.gamma * next_q
+        dones = torch.tensor(
+            dones,
+            dtype=torch.float32,
+            device=self.device
+        )
 
-        loss = nn.MSELoss()(q_values, target.detach())
+        q_values = self.q_net(states)
+
+        current_q = q_values.gather(
+            1,
+            actions
+        ).squeeze(1)
+
+        with torch.no_grad():
+            next_q = self.target_net(
+                next_states
+            ).max(1)[0]
+
+            target_q = rewards + (
+                1 - dones
+            ) * self.gamma * next_q
+
+        loss = self.loss_fn(
+            current_q,
+            target_q
+        )
 
         self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()
 
-        self.epsilon = max(self.epsilon_min, self.epsilon * self.epsilon_decay)
+        if self.epsilon > self.epsilon_min:
+            self.epsilon *= self.epsilon_decay
 
-    # ---------------- SAVE / LOAD ---------------- #
+        if self.epsilon < self.epsilon_min:
+            self.epsilon = self.epsilon_min
 
-    def save(self, path="models/dqn_model.pth"):
+    def save(self, path):
+        torch.save(
+            {
+                "q_net": self.q_net.state_dict(),
+                "target_net": self.target_net.state_dict(),
+                "epsilon": self.epsilon,
+                "state_dim": self.state_dim,
+                "action_dim": self.action_dim
+            },
+            path
+        )
 
-        torch.save({
-            "q_net": self.q_net.state_dict(),
-            "target_net": self.target_net.state_dict(),
-            "epsilon": self.epsilon
-        }, path)
+    def load(self, path):
+        checkpoint = torch.load(
+            path,
+            map_location=self.device
+        )
 
-        print("Model saved")
+        self.q_net.load_state_dict(
+            checkpoint["q_net"]
+        )
 
-    def load(self, path="models/dqn_model.pth"):
+        self.target_net.load_state_dict(
+            checkpoint["target_net"]
+        )
 
-        checkpoint = torch.load(path)
-
-        self.q_net.load_state_dict(checkpoint["q_net"])
-        self.target_net.load_state_dict(checkpoint["target_net"])
-        self.epsilon = checkpoint["epsilon"]
-
-        print("Model loaded")
+        self.epsilon = checkpoint.get(
+            "epsilon",
+            self.epsilon
+        )

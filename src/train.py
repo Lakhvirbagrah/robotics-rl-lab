@@ -17,7 +17,9 @@ def main():
 
     task = ObjectCenteringTask()
     env = TurtlebotEnv(task)
-    agent = Agent()
+    agent = Agent(
+    state_dim=1,
+    action_dim=5)
     buffer = ReplayBuffer()
 
     # ---------------- LOAD CHECKPOINTS ---------------- #
