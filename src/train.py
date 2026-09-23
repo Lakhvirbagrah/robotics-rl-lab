@@ -4,24 +4,35 @@ import rospy
 import numpy as np
 import os
 import pickle
-
+import yaml
 from environments.turtlebot_env import TurtlebotEnv
 from agents.dqn import Agent
 from replay_buffer import ReplayBuffer
 from tasks.object_centering import ObjectCenteringTask
 
+def load_config(path):
+    with open(path, "r") as f:
+        return yaml.safe_load(f)
 
 def main():
 
     rospy.init_node("dqn_trainer")
+    config = load_config("configs/object_centering_dqn.yaml")
 
-    task = ObjectCenteringTask()
+    task = ObjectCenteringTask(
+    center_target=config["task"]["center_target"],
+    tolerance=config["task"]["tolerance"]
+)
     env = TurtlebotEnv(task)
     agent = Agent(
     state_dim=task.get_state_dim(),
-    action_dim=task.get_action_dim())
-    buffer = ReplayBuffer()
-
+    action_dim=task.get_action_dim(),
+    gamma=config["agent"]["gamma"],
+    epsilon=config["agent"]["epsilon_start"],
+    epsilon_min=config["agent"]["epsilon_min"],
+    epsilon_decay=config["agent"]["epsilon_decay"],
+    lr=config["agent"]["learning_rate"]
+)
     # ---------------- LOAD CHECKPOINTS ---------------- #
 
     if os.path.exists("models/dqn_model.pth"):
@@ -34,7 +45,7 @@ def main():
 
     reward_log = []
 
-    episodes = 500
+    episodes = config["training"]["episodes"]
 
     for ep in range(episodes):
 
@@ -57,7 +68,7 @@ def main():
 
             buffer.push(state, action, reward, next_state, done)
 
-            agent.train(buffer)
+            agent.train(buffer,batch_size=config["training"]["batch_size"])
 
             state = next_state
             total_reward += reward
