@@ -6,7 +6,7 @@ import os
 import pickle
 import yaml
 from environments.turtlebot_env import TurtlebotEnv
-from agents.dqn import Agent
+from agents.factory import create_agent
 from replay_buffer import ReplayBuffer
 from tasks.factory import create_task
 
@@ -21,15 +21,7 @@ def main():
 
     task = create_task(config)
     env = TurtlebotEnv(task)
-    agent = Agent(
-    state_dim=task.get_state_dim(),
-    action_dim=task.get_action_dim(),
-    gamma=config["agent"]["gamma"],
-    epsilon=config["agent"]["epsilon_start"],
-    epsilon_min=config["agent"]["epsilon_min"],
-    epsilon_decay=config["agent"]["epsilon_decay"],
-    lr=config["agent"]["learning_rate"]
-)
+    agent = create_agent(config, task)
     # ---------------- LOAD CHECKPOINTS ---------------- #
 
     if os.path.exists("models/dqn_model.pth"):
