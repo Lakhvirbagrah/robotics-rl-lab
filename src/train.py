@@ -8,7 +8,7 @@ import yaml
 from environments.turtlebot_env import TurtlebotEnv
 from agents.dqn import Agent
 from replay_buffer import ReplayBuffer
-from tasks.object_centering import ObjectCenteringTask
+from tasks.factory import create_task
 
 def load_config(path):
     with open(path, "r") as f:
@@ -19,10 +19,7 @@ def main():
     rospy.init_node("dqn_trainer")
     config = load_config("configs/object_centering_dqn.yaml")
 
-    task = ObjectCenteringTask(
-    center_target=config["task"]["center_target"],
-    tolerance=config["task"]["tolerance"]
-)
+    task = create_task(config)
     env = TurtlebotEnv(task)
     agent = Agent(
     state_dim=task.get_state_dim(),
