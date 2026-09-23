@@ -1,0 +1,28 @@
+<launch>
+
+  <!-- Load custom Gazebo world -->
+  <include file="$(find gazebo_ros)/launch/empty_world.launch">
+    <arg name="world_name" value="$(find first)/src/set_env.world"/>
+    <arg name="paused" value="false"/>
+    <arg name="use_sim_time" value="true"/>
+    <arg name="gui" value="true"/>
+  </include>
+
+  <!-- Load TurtleBot3 robot description -->
+  <param
+      name="robot_description"
+      command="$(find xacro)/xacro $(find turtlebot3_description)/urdf/turtlebot3_$(env TURTLEBOT3_MODEL).urdf.xacro"
+  />
+
+  <!-- Spawn TurtleBot3 -->
+  <node
+      pkg="gazebo_ros"
+      type="spawn_model"
+      name="spawn_tb3"
+      args="-urdf -model turtlebot3 -param robot_description -x 0 -y 0 -z 0"
+  />
+
+  <!-- Teleop -->
+  <include file="$(find turtlebot3_teleop)/launch/turtlebot3_teleop_key.launch"/>
+
+</launch>

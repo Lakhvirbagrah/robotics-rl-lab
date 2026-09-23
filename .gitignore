@@ -1,0 +1,63 @@
+# =========================
+# Python
+# =========================
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# =========================
+# ROS / Catkin generated files
+# =========================
+build/
+devel/
+install/
+log/
+logs/
+
+# =========================
+# Virtual environments
+# =========================
+venv/
+.venv/
+env/
+.env/
+
+# =========================
+# Trained models / large generated files
+# =========================
+*.pth
+*.pkl
+*.pickle
+
+# YOLO weights are downloaded separately
+*.pt
+
+# =========================
+# Experiment / temporary output
+# =========================
+*.log
+*.tmp
+*.swp
+*.bag
+
+# =========================
+# IDE / OS
+# =========================
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# =========================
+# Local project notes / AI handoffs
+# =========================
+src/chatgpt.txt
+src/handoffs.txt
+src/project_context.txt
+
+# =========================
+# Backups
+# =========================
+*.backup
+*~

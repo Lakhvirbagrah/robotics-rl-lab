@@ -1,0 +1,39 @@
+<?xml version="1.0"?>
+<package format="2">
+
+  <name>first</name>
+  <version>0.1.0</version>
+
+  <description>
+    Vision-guided TurtleBot reinforcement learning project using ROS,
+    Gazebo, YOLOv5, and Deep Q-Networks.
+  </description>
+
+  <maintainer email="Lakhvirbagrah786@gmail.com">
+    Lakhvir Singh
+  </maintainer>
+
+  <license>MIT</license>
+
+  <!-- Build system -->
+  <buildtool_depend>catkin</buildtool_depend>
+
+  <!-- ROS runtime/build dependencies -->
+  <depend>rospy</depend>
+  <depend>std_msgs</depend>
+  <depend>geometry_msgs</depend>
+  <depend>sensor_msgs</depend>
+  <depend>cv_bridge</depend>
+
+  <!-- Gazebo -->
+  <depend>gazebo_ros</depend>
+
+  <!-- TurtleBot / URDF -->
+  <depend>xacro</depend>
+  <depend>turtlebot3_description</depend>
+  <depend>turtlebot3_teleop</depend>
+
+  <export>
+  </export>
+
+</package>
