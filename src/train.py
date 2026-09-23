@@ -7,7 +7,7 @@ import pickle
 import yaml
 from environments.turtlebot_env import TurtlebotEnv
 from agents.factory import create_agent
-from replay_buffer import ReplayBuffer
+from rl_utils.replay_buffer import ReplayBuffer
 from tasks.factory import create_task
 
 def load_config(path):
