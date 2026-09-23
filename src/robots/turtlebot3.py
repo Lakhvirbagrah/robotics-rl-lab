@@ -13,16 +13,22 @@ class TurtleBot3:
 def execute_action(self, action):
     cmd = Twist()
 
-    if action == 0:
+    if action == "forward":
+        cmd.linear.x = 0.2
+
+    elif action == "backward":
+        cmd.linear.x = -0.2
+
+    elif action == "turn_left":
         cmd.angular.z = 0.5
 
-    elif action == 1:
+    elif action == "turn_right":
         cmd.angular.z = -0.5
 
-    elif action == 2:
+    elif action == "stop":
         pass
 
-    self.cmd_pub.publish(cmd)
+    else:
+        raise ValueError(f"Unknown robot action: {action}")
 
-    def stop(self):
-        self.cmd_pub.publish(Twist())
+    self.cmd_pub.publish(cmd)

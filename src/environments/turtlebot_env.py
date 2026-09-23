@@ -23,7 +23,9 @@ class TurtlebotEnv:
     def yolo_callback(self, msg):
         self.observation = np.array(msg.data, dtype=np.float32)
 
-    def execute_action(self, action):
+    def execute_action(self, action_index):
+        action = self.task.get_action(action_index)
+
         self.robot.execute_action(action)
 
     def step(self, action):

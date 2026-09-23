@@ -13,6 +13,22 @@ class ObjectCenteringTask(BaseTask):
     def reset(self):
         self.previous_error = None
 
+    def get_state_dim(self):
+        return 1
+
+    def get_actions(self):
+        return [
+            "turn_left",
+            "turn_right",
+            "stop"
+        ]
+
+    def get_action_dim(self):
+        return len(self.get_actions())
+
+    def get_action(self, action_index):
+        return self.get_actions()[action_index]
+
     def get_state(self, observation):
         center_x = observation[0]
 
@@ -26,17 +42,14 @@ class ObjectCenteringTask(BaseTask):
 
         error = abs(center_x - self.center_target)
 
-        # First observation has no previous error to compare against
         if self.previous_error is None:
             self.previous_error = error
             return 0.0
 
-        # Positive reward when centering improves
         reward = self.previous_error - error
 
         self.previous_error = error
 
-        # Success bonus
         if error <= self.tolerance:
             reward += 1.0
 
@@ -48,8 +61,3 @@ class ObjectCenteringTask(BaseTask):
         error = abs(center_x - self.center_target)
 
         return error <= self.tolerance
-
-    def get_action_dim(self):
-        return 3
-    def get_state_dim(self):
-        return 1
