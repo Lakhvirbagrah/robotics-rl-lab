@@ -8,13 +8,15 @@ import pickle
 from environments.turtlebot_env import TurtlebotEnv
 from agents.dqn import Agent
 from replay_buffer import ReplayBuffer
+from tasks.object_centering import ObjectCenteringTask
 
 
 def main():
 
     rospy.init_node("dqn_trainer")
 
-    env = TurtlebotEnv()
+    task = ObjectCenteringTask()
+    env = TurtlebotEnv(task)
     agent = Agent()
     buffer = ReplayBuffer()
 
@@ -35,7 +37,7 @@ def main():
     for ep in range(episodes):
 
         state = env.reset()
-        state = np.array(state[:2])
+        state = np.array(state)
 
         total_reward = 0
         done = False
@@ -49,7 +51,7 @@ def main():
             if next_state is None:
                 continue
 
-            next_state = np.array(next_state[:2])
+            next_state = np.array(next_state)
 
             buffer.push(state, action, reward, next_state, done)
 

@@ -6,63 +6,48 @@ from robots.turtlebot3 import TurtleBot3
 
 
 class TurtlebotEnv:
+    def __init__(self, task):
+        self.task = task
+        self.observation = None
 
-    def __init__(self):
-
-        self.state = None
-        self.prev_width = 0.0
-
-        rospy.Subscriber("/yolo_state", Float32MultiArray, self.yolo_callback)
+        rospy.Subscriber(
+            "/yolo_state",
+            Float32MultiArray,
+            self.yolo_callback
+        )
 
         self.robot = TurtleBot3()
 
         rospy.sleep(1)
 
     def yolo_callback(self, msg):
-        self.state = np.array(msg.data)
+        self.observation = np.array(msg.data, dtype=np.float32)
 
     def execute_action(self, action):
-        self.robot.execute_action(action)    
-
-    def compute_reward(self, state):
-
-        center_x = state[0]
-        width = state[1]
-
-        reward = 0
-        done = False
-
-        error = abs(center_x - 0.5)
-        reward += (1 - error)
-
-        reward += 10 * (width - self.prev_width)
-
-        self.prev_width = width
-
-        if width > 0.5:
-            reward += 100
-            done = True
-
-        return reward, done
+        self.robot.execute_action(action)
 
     def step(self, action):
-
         self.execute_action(action)
+
         rospy.sleep(0.2)
 
-        if self.state is None:
-            return None, -1, False
+        if self.observation is None:
+            return None, -1.0, False
 
-        next_state = self.state.copy()
+        observation = self.observation.copy()
 
-        reward, done = self.compute_reward(next_state)
+        next_state = self.task.get_state(observation)
+        reward = self.task.compute_reward(observation)
+        done = self.task.is_done(observation)
 
         return next_state, reward, done
 
     def reset(self):
-        self.prev_width = 0.0
+        self.task.reset()
 
-        while self.state is None and not rospy.is_shutdown():
+        while self.observation is None and not rospy.is_shutdown():
             rospy.sleep(0.1)
 
-        return self.state.copy()
+        observation = self.observation.copy()
+
+        return self.task.get_state(observation)
