@@ -6,7 +6,7 @@ import os
 import pickle
 
 from rl_env import TurtlebotEnv
-from dqn import Agent
+from agents.dqn import Agent
 from replay_buffer import ReplayBuffer
 
 
