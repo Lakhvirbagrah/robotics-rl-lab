@@ -51,3 +51,5 @@ class ObjectCenteringTask(BaseTask):
 
     def get_action_dim(self):
         return 3
+    def get_state_dim(self):
+        return 1

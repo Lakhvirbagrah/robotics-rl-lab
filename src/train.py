@@ -18,7 +18,7 @@ def main():
     task = ObjectCenteringTask()
     env = TurtlebotEnv(task)
     agent = Agent(
-    state_dim=1,
+    state_dim=task.get_state_dim(),
     action_dim=task.get_action_dim())
     buffer = ReplayBuffer()
 
