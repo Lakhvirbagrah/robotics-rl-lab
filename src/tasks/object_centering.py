@@ -48,3 +48,6 @@ class ObjectCenteringTask(BaseTask):
         error = abs(center_x - self.center_target)
 
         return error <= self.tolerance
+
+    def get_action_dim(self):
+        return 3

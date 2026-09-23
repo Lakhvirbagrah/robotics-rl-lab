@@ -10,25 +10,19 @@ class TurtleBot3:
             queue_size=10
         )
 
-    def execute_action(self, action):
-        cmd = Twist()
+def execute_action(self, action):
+    cmd = Twist()
 
-        if action == 0:
-            cmd.linear.x = 0.2
+    if action == 0:
+        cmd.angular.z = 0.5
 
-        elif action == 1:
-            cmd.linear.x = -0.2
+    elif action == 1:
+        cmd.angular.z = -0.5
 
-        elif action == 2:
-            cmd.angular.z = 0.5
+    elif action == 2:
+        pass
 
-        elif action == 3:
-            cmd.angular.z = -0.5
-
-        elif action == 4:
-            pass
-
-        self.cmd_pub.publish(cmd)
+    self.cmd_pub.publish(cmd)
 
     def stop(self):
         self.cmd_pub.publish(Twist())

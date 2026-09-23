@@ -19,7 +19,7 @@ def main():
     env = TurtlebotEnv(task)
     agent = Agent(
     state_dim=1,
-    action_dim=5)
+    action_dim=task.get_action_dim())
     buffer = ReplayBuffer()
 
     # ---------------- LOAD CHECKPOINTS ---------------- #
