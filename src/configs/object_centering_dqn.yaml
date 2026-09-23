@@ -12,6 +12,7 @@ algorithm:
 training:
   episodes: 500
   batch_size: 32
+  checkpoint_interval: 10
 
 agent:
   gamma: 0.99
@@ -19,3 +20,8 @@ agent:
   epsilon_start: 1.0
   epsilon_min: 0.05
   epsilon_decay: 0.995
+
+paths:
+  model: models/object_centering_dqn.pth
+  replay_buffer: memory/object_centering_dqn.pkl
+  reward_log: logs/object_centering_dqn_rewards.csv
