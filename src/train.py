@@ -5,7 +5,7 @@ import numpy as np
 import os
 import pickle
 
-from rl_env import TurtlebotEnv
+from environments.turtlebot_env import TurtlebotEnv
 from agents.dqn import Agent
 from replay_buffer import ReplayBuffer
 
