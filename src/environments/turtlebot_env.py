@@ -2,7 +2,7 @@ import rospy
 import numpy as np
 
 from std_msgs.msg import Float32MultiArray
-from geometry_msgs.msg import Twist
+from robots.turtlebot3 import TurtleBot3
 
 
 class TurtlebotEnv:
@@ -14,7 +14,7 @@ class TurtlebotEnv:
 
         rospy.Subscriber("/yolo_state", Float32MultiArray, self.yolo_callback)
 
-        self.cmd_pub = rospy.Publisher("/cmd_vel", Twist, queue_size=10)
+        self.robot = TurtleBot3()
 
         rospy.sleep(1)
 
@@ -22,22 +22,7 @@ class TurtlebotEnv:
         self.state = np.array(msg.data)
 
     def execute_action(self, action):
-
-        cmd = Twist()
-
-        if action == 0:
-            cmd.linear.x = 0.2
-
-        elif action == 1:
-            cmd.linear.x = -0.2
-
-        elif action == 2:
-            cmd.angular.z = 0.5
-
-        elif action == 3:
-            cmd.angular.z = -0.5
-
-        self.cmd_pub.publish(cmd)
+        self.robot.execute_action(action)    
 
     def compute_reward(self, state):
 
