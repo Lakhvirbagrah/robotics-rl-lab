@@ -1,7 +1,5 @@
 import rospy
-import numpy as np
-
-from std_msgs.msg import Float32MultiArray
+from perception.yolo_state import YoloStateProvider
 from robots.turtlebot3 import TurtleBot3
 
 
@@ -9,19 +7,15 @@ class TurtlebotEnv:
     def __init__(self, task):
         self.task = task
         self.observation = None
+        self.perception = YoloStateProvider()
 
-        rospy.Subscriber(
-            "/yolo_state",
-            Float32MultiArray,
-            self.yolo_callback
-        )
+        
 
         self.robot = TurtleBot3()
 
         rospy.sleep(1)
 
-    def yolo_callback(self, msg):
-        self.observation = np.array(msg.data, dtype=np.float32)
+    
 
     def execute_action(self, action_index):
         action = self.task.get_action(action_index)
@@ -29,14 +23,16 @@ class TurtlebotEnv:
         self.robot.execute_action(action)
 
     def step(self, action):
+        
         self.execute_action(action)
 
         rospy.sleep(0.2)
+        observation = self.perception.get_observation()
 
-        if self.observation is None:
+        if observation is None:
             return None, -1.0, False
 
-        observation = self.observation.copy()
+        
 
         next_state = self.task.get_state(observation)
         reward = self.task.compute_reward(observation)
@@ -46,10 +42,10 @@ class TurtlebotEnv:
 
     def reset(self):
         self.task.reset()
+        observation = self.perception.get_observation()
 
-        while self.observation is None and not rospy.is_shutdown():
+        while observation is None and not rospy.is_shutdown():
             rospy.sleep(0.1)
-
-        observation = self.observation.copy()
+            observation = self.perception.get_observation()
 
         return self.task.get_state(observation)
