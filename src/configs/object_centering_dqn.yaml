@@ -1,0 +1,21 @@
+experiment:
+  name: object_centering_dqn
+
+task:
+  name: object_centering
+  center_target: 0.5
+  tolerance: 0.05
+
+algorithm:
+  name: dqn
+
+training:
+  episodes: 500
+  batch_size: 32
+
+agent:
+  gamma: 0.99
+  learning_rate: 0.001
+  epsilon_start: 1.0
+  epsilon_min: 0.05
+  epsilon_decay: 0.995
