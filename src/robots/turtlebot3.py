@@ -1,3 +1,5 @@
+import math
+
 import rospy
 
 from geometry_msgs.msg import Twist
@@ -72,12 +74,17 @@ class TurtleBot3:
         state.pose.position.y = y
         state.pose.position.z = 0.0
 
-        # Quaternion for yaw-only rotation
+        # Convert yaw angle to quaternion
         state.pose.orientation.x = 0.0
         state.pose.orientation.y = 0.0
-        state.pose.orientation.z = 0.0
-        state.pose.orientation.w = 1.0
+        state.pose.orientation.z = math.sin(
+            yaw / 2.0
+        )
+        state.pose.orientation.w = math.cos(
+            yaw / 2.0
+        )
 
+        # Remove any remaining movement
         state.twist.linear.x = 0.0
         state.twist.linear.y = 0.0
         state.twist.linear.z = 0.0

@@ -52,6 +52,14 @@ def main():
     action_duration=config["training"].get(
         "action_duration",
         0.2
+    ),
+    reset_yaw_min=config["training"].get(
+        "reset_yaw_min",
+        0.0
+    ),
+    reset_yaw_max=config["training"].get(
+        "reset_yaw_max",
+        0.0
     ))
 
     agent = create_agent(

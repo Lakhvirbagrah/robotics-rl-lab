@@ -1,12 +1,22 @@
 import rospy
 from perception.yolo_state import YoloStateProvider
 from robots.turtlebot3 import TurtleBot3
+import random
 
 
 class TurtlebotEnv:
-    def __init__(self, task, action_duration=0.2):
+    def __init__(
+    self,
+    task,
+    action_duration=0.2,
+    reset_yaw_min=0.0,
+    reset_yaw_max=0.0):
         self.task = task
+
         self.action_duration = action_duration
+
+        self.reset_yaw_min = reset_yaw_min
+        self.reset_yaw_max = reset_yaw_max
         self.observation = None
         self.perception = YoloStateProvider()
 
@@ -44,17 +54,24 @@ class TurtlebotEnv:
     def reset(self):
         self.robot.stop()
 
+        random_yaw = random.uniform(
+            self.reset_yaw_min,
+            self.reset_yaw_max
+        )
+
         self.robot.reset_pose(
             x=0.0,
             y=0.0,
-            yaw=0.0
+            yaw=random_yaw
         )
 
         self.task.reset()
 
         rospy.sleep(0.5)
 
-        observation = self.perception.get_observation()
+        observation = (
+            self.perception.get_observation()
+        )
 
         while (
             observation is None
@@ -65,6 +82,11 @@ class TurtlebotEnv:
             observation = (
                 self.perception.get_observation()
             )
+
+        rospy.loginfo(
+            f"Episode reset yaw: "
+            f"{random_yaw:.3f} rad"
+        )
 
         return self.task.get_state(
             observation

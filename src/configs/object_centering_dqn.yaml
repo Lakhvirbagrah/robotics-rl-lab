@@ -10,12 +10,14 @@ algorithm:
   name: dqn
 
 training:
-  episodes: 500
+  episodes: 3
   batch_size: 32
   checkpoint_interval: 10
   max_steps_per_episode: 200
-  log_interval_steps: 20  
+  log_interval_steps: 20
   action_duration: 0.10
+  reset_yaw_min: -0.6
+  reset_yaw_max: 0.6
 
 agent:
   gamma: 0.99
