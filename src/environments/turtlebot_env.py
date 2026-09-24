@@ -48,15 +48,14 @@ class TurtlebotEnv:
         )
 
         yaw_offset = direction * random.uniform(
-            0.15,
-            self.reset_yaw_jitter
+            0.20,
+            0.35
         )
 
         reset_yaw = (
             self.reset_yaw_base
             + yaw_offset
         )
-
         # Reset TurtleBot near the target.
         self.robot.reset_pose(
             x=self.reset_x,
