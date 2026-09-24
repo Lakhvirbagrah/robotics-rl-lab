@@ -43,8 +43,12 @@ class TurtlebotEnv:
 
         # Small random orientation around the direction
         # facing the Stop Sign.
-        yaw_offset = random.uniform(
-            -self.reset_yaw_jitter,
+        direction = random.choice(
+            [-1.0, 1.0]
+        )
+
+        yaw_offset = direction * random.uniform(
+            0.15,
             self.reset_yaw_jitter
         )
 

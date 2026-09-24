@@ -3,7 +3,7 @@ import numpy as np
 from tasks.base_task import BaseTask
 
 
-class ObjectCenteringTask(BaseTask):
+class ObjectCenteringTask:
 
     def __init__(
         self,
@@ -12,6 +12,7 @@ class ObjectCenteringTask(BaseTask):
     ):
         self.center_target = center_target
         self.tolerance = tolerance
+
         self.previous_error = None
 
     def reset(self):
@@ -28,10 +29,14 @@ class ObjectCenteringTask(BaseTask):
         ]
 
     def get_action_dim(self):
-        return len(self.get_actions())
+        return len(
+            self.get_actions()
+        )
 
     def get_action(self, action_index):
-        return self.get_actions()[action_index]
+        return self.get_actions()[
+            action_index
+        ]
 
     def get_state(self, observation):
         detected = observation[0]
@@ -48,33 +53,49 @@ class ObjectCenteringTask(BaseTask):
     def compute_reward(self, observation):
         detected = observation[0]
 
+        # Target lost
         if detected < 0.5:
             self.previous_error = None
 
-            return -0.1
+            return -0.05
 
         center_x = observation[1]
 
         error = abs(
-            center_x - self.center_target
+            center_x
+            - self.center_target
         )
 
+        # Strong success reward
+        if error <= self.tolerance:
+            self.previous_error = error
+
+            return 5.0
+
+        # First valid detection after reset
         if self.previous_error is None:
             self.previous_error = error
 
-            return 0.0
+            # Small reward for simply
+            # keeping the target visible
+            return 0.05
 
-        reward = (
+        improvement = (
             self.previous_error
             - error
         )
 
         self.previous_error = error
 
-        if error <= self.tolerance:
-            reward += 1.0
+        # Scale movement toward/away
+        # from center so DQN gets
+        # a stronger learning signal.
+        reward = improvement * 10.0
 
-        return reward
+        # Small visibility reward
+        reward += 0.02
+
+        return float(reward)
 
     def is_done(self, observation):
         detected = observation[0]
@@ -85,7 +106,10 @@ class ObjectCenteringTask(BaseTask):
         center_x = observation[1]
 
         error = abs(
-            center_x - self.center_target
+            center_x
+            - self.center_target
         )
 
-        return error <= self.tolerance
+        return (
+            error <= self.tolerance
+        )
