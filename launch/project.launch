@@ -1,28 +1,35 @@
 <launch>
 
-  <!-- Training mode: GUI disabled by default -->
+  <!--
+    GUI is disabled by default for faster RL training.
+    Use gui:=true when debugging visually.
+  -->
   <arg name="gui" default="false"/>
 
-  <!-- Load custom Gazebo world -->
+  <!-- Load the complete custom Gazebo world.
+       The world already contains TurtleBot3 and the Stop Sign target. -->
   <include file="$(find gazebo_ros)/launch/empty_world.launch">
-    <arg name="world_name" value="$(find first)/src/set_env.world"/>
-    <arg name="paused" value="false"/>
-    <arg name="use_sim_time" value="true"/>
-    <arg name="gui" value="$(arg gui)"/>
+
+    <arg
+        name="world_name"
+        value="$(find first)/src/set_env.world"
+    />
+
+    <arg
+        name="paused"
+        value="false"
+    />
+
+    <arg
+        name="use_sim_time"
+        value="true"
+    />
+
+    <arg
+        name="gui"
+        value="$(arg gui)"
+    />
+
   </include>
-
-  <!-- Load TurtleBot3 robot description -->
-  <param
-      name="robot_description"
-      command="$(find xacro)/xacro $(find turtlebot3_description)/urdf/turtlebot3_$(env TURTLEBOT3_MODEL).urdf.xacro"
-  />
-
-  <!-- Spawn TurtleBot3 -->
-  <node
-      pkg="gazebo_ros"
-      type="spawn_model"
-      name="spawn_tb3"
-      args="-urdf -model turtlebot3 -param robot_description -x 0 -y 0 -z 0"
-  />
 
 </launch>
