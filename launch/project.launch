@@ -1,11 +1,14 @@
 <launch>
 
+  <!-- Training mode: GUI disabled by default -->
+  <arg name="gui" default="false"/>
+
   <!-- Load custom Gazebo world -->
   <include file="$(find gazebo_ros)/launch/empty_world.launch">
     <arg name="world_name" value="$(find first)/src/set_env.world"/>
     <arg name="paused" value="false"/>
     <arg name="use_sim_time" value="true"/>
-    <arg name="gui" value="true"/>
+    <arg name="gui" value="$(arg gui)"/>
   </include>
 
   <!-- Load TurtleBot3 robot description -->
@@ -21,6 +24,5 @@
       name="spawn_tb3"
       args="-urdf -model turtlebot3 -param robot_description -x 0 -y 0 -z 0"
   />
-
 
 </launch>
