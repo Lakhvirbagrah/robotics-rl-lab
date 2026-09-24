@@ -11,7 +11,7 @@ from cv_bridge import CvBridge
 
 
 SHOW_YOLO_WINDOW = False
-
+TARGET_CLASS = "sports ball"
 
 bridge = CvBridge()
 
@@ -38,15 +38,28 @@ def image_callback(msg):
 
         results = model(frame)
 
-        detections = results.xyxy[0]
+        detections = results.pandas().xyxy[0]
 
-        if len(detections) > 0:
-            det = detections[0]
+        # Keep only the target class we care about.
+        target_detections = detections[
+            detections["name"] == TARGET_CLASS
+        ]
 
-            x1 = float(det[0])
-            y1 = float(det[1])
-            x2 = float(det[2])
-            y2 = float(det[3])
+        state_msg = Float32MultiArray()
+
+        if len(target_detections) > 0:
+
+            # If more than one sports ball is detected,
+            # use the highest-confidence detection.
+            target = target_detections.sort_values(
+                by="confidence",
+                ascending=False
+            ).iloc[0]
+
+            x1 = float(target["xmin"])
+            y1 = float(target["ymin"])
+            x2 = float(target["xmax"])
+            y2 = float(target["ymax"])
 
             img_h, img_w = frame.shape[:2]
 
@@ -70,31 +83,48 @@ def image_callback(msg):
                 / img_h
             )
 
-            state_msg = Float32MultiArray()
-
             state_msg.data = [
+                1.0,
                 center_x,
                 center_y,
                 width,
                 height
             ]
 
-            state_pub.publish(state_msg)
+        else:
+
+            # Explicitly tell the RL system
+            # that the target is not visible.
+            state_msg.data = [
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0
+            ]
+
+        state_pub.publish(
+            state_msg
+        )
 
         if SHOW_YOLO_WINDOW:
+
             rendered = np.squeeze(
                 results.render()
             )
 
             cv2.imshow(
-                "YOLO",
+                "YOLO Sports Ball Detection",
                 rendered
             )
 
             cv2.waitKey(1)
 
     except Exception as e:
-        rospy.logerr(str(e))
+
+        rospy.logerr(
+            f"YOLO callback error: {e}"
+        )
 
 
 def main():
@@ -121,9 +151,13 @@ def main():
         "YOLO perception node started"
     )
 
+    rospy.loginfo(
+        f"Target class: {TARGET_CLASS}"
+    )
+
     if not SHOW_YOLO_WINDOW:
         rospy.loginfo(
-            "YOLO visualization disabled for training"
+            "YOLO visualization disabled for faster training"
         )
 
     rospy.spin()

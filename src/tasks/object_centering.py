@@ -5,7 +5,11 @@ from tasks.base_task import BaseTask
 
 class ObjectCenteringTask(BaseTask):
 
-    def __init__(self, center_target=0.5, tolerance=0.05):
+    def __init__(
+        self,
+        center_target=0.5,
+        tolerance=0.05
+    ):
         self.center_target = center_target
         self.tolerance = tolerance
         self.previous_error = None
@@ -14,7 +18,7 @@ class ObjectCenteringTask(BaseTask):
         self.previous_error = None
 
     def get_state_dim(self):
-        return 1
+        return 2
 
     def get_actions(self):
         return [
@@ -30,23 +34,40 @@ class ObjectCenteringTask(BaseTask):
         return self.get_actions()[action_index]
 
     def get_state(self, observation):
-        center_x = observation[0]
+        detected = observation[0]
+        center_x = observation[1]
 
         return np.array(
-            [center_x],
+            [
+                center_x,
+                detected
+            ],
             dtype=np.float32
         )
 
     def compute_reward(self, observation):
-        center_x = observation[0]
+        detected = observation[0]
 
-        error = abs(center_x - self.center_target)
+        if detected < 0.5:
+            self.previous_error = None
+
+            return -0.1
+
+        center_x = observation[1]
+
+        error = abs(
+            center_x - self.center_target
+        )
 
         if self.previous_error is None:
             self.previous_error = error
+
             return 0.0
 
-        reward = self.previous_error - error
+        reward = (
+            self.previous_error
+            - error
+        )
 
         self.previous_error = error
 
@@ -56,8 +77,15 @@ class ObjectCenteringTask(BaseTask):
         return reward
 
     def is_done(self, observation):
-        center_x = observation[0]
+        detected = observation[0]
 
-        error = abs(center_x - self.center_target)
+        if detected < 0.5:
+            return False
+
+        center_x = observation[1]
+
+        error = abs(
+            center_x - self.center_target
+        )
 
         return error <= self.tolerance
