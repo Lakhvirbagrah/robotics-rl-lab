@@ -43,14 +43,29 @@ class TurtlebotEnv:
 
     def reset(self):
         self.robot.stop()
+
+        self.robot.reset_pose(
+            x=0.0,
+            y=0.0,
+            yaw=0.0
+        )
+
         self.task.reset()
 
-        rospy.sleep(0.2)
+        rospy.sleep(0.5)
 
         observation = self.perception.get_observation()
 
-        while observation is None and not rospy.is_shutdown():
+        while (
+            observation is None
+            and not rospy.is_shutdown()
+        ):
             rospy.sleep(0.1)
-            observation = self.perception.get_observation()
 
-        return self.task.get_state(observation)
+            observation = (
+                self.perception.get_observation()
+            )
+
+        return self.task.get_state(
+            observation
+        )
