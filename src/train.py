@@ -1,151 +1,313 @@
 #!/usr/bin/env python3
 
 import argparse
+import csv
 import os
 import pickle
 import time
-import yaml
 
 import rospy
+import yaml
 
-from environments.turtlebot_env import TurtlebotEnv
 from agents.factory import create_agent
+from environments.turtlebot_env import TurtlebotEnv
 from rl_utils.replay_buffer import ReplayBuffer
 from tasks.factory import create_task
 
 
-def load_config(path):
-    with open(path, "r") as f:
-        return yaml.safe_load(f)
+def load_config(config_path):
+    with open(config_path, "r") as file:
+        return yaml.safe_load(file)
 
 
-def parse_args():
-    parser = argparse.ArgumentParser(
-        description="Train a robotics reinforcement-learning experiment"
+def save_replay_buffer(
+    replay_buffer,
+    replay_path
+):
+    os.makedirs(
+        os.path.dirname(replay_path),
+        exist_ok=True
     )
 
-    parser.add_argument(
-        "--config",
-        type=str,
-        default="configs/object_centering_dqn.yaml",
-        help="Path to experiment configuration file"
+    with open(
+        replay_path,
+        "wb"
+    ) as file:
+        pickle.dump(
+            replay_buffer,
+            file
+        )
+
+
+def load_replay_buffer(
+    replay_path,
+    default_capacity=100000
+):
+    if os.path.exists(replay_path):
+        try:
+            with open(
+                replay_path,
+                "rb"
+            ) as file:
+                replay_buffer = pickle.load(
+                    file
+                )
+
+            print(
+                f"Loaded replay buffer: "
+                f"{len(replay_buffer)} transitions"
+            )
+
+            return replay_buffer
+
+        except Exception as error:
+            print(
+                "Could not load replay buffer:",
+                error
+            )
+
+    return ReplayBuffer(
+        default_capacity
     )
 
-    return parser.parse_args()
+
+def append_episode_log(
+    log_path,
+    episode,
+    total_reward,
+    step_count,
+    success,
+    episode_time,
+    steps_per_second,
+    epsilon
+):
+    os.makedirs(
+        os.path.dirname(log_path),
+        exist_ok=True
+    )
+
+    file_exists = os.path.exists(
+        log_path
+    )
+
+    with open(
+        log_path,
+        "a",
+        newline=""
+    ) as file:
+
+        writer = csv.writer(
+            file
+        )
+
+        if not file_exists:
+            writer.writerow(
+                [
+                    "episode",
+                    "reward",
+                    "steps",
+                    "success",
+                    "episode_time",
+                    "steps_per_second",
+                    "epsilon"
+                ]
+            )
+
+        writer.writerow(
+            [
+                episode,
+                total_reward,
+                step_count,
+                int(success),
+                episode_time,
+                steps_per_second,
+                epsilon
+            ]
+        )
 
 
 def main():
-    args = parse_args()
 
-    config = load_config(args.config)
+    parser = argparse.ArgumentParser()
 
-    rospy.init_node("robotics_rl_trainer")
+    parser.add_argument(
+        "--config",
+        required=True,
+        help="Path to experiment YAML configuration"
+    )
 
-    # --------------------------------------------------
-    # Build experiment
-    # --------------------------------------------------
+    args = parser.parse_args()
 
-    task = create_task(config)
+    # -------------------------------------------------
+    # Load configuration
+    # -------------------------------------------------
+
+    config = load_config(
+        args.config
+    )
+
+    rospy.init_node(
+        "robotics_rl_trainer"
+    )
+
+    print()
+    print(
+        "Experiment:",
+        config["experiment"]["name"]
+    )
+
+    # -------------------------------------------------
+    # Create task
+    # -------------------------------------------------
+
+    task = create_task(
+        config
+    )
+
+    print(
+        "Task:",
+        task.__class__.__name__
+    )
+
+    print(
+        "State dimension:",
+        task.get_state_dim()
+    )
+
+    print(
+        "Action dimension:",
+        task.get_action_dim()
+    )
+
+    print(
+        "Actions:",
+        task.get_actions()
+    )
+
+    # -------------------------------------------------
+    # Create environment
+    # -------------------------------------------------
 
     env = TurtlebotEnv(
-    task,
-
-    action_duration=config["training"].get(
-        "action_duration",
-        0.1
-    ),
-
-    reset_x=config["training"].get(
-        "reset_x",
-        -1.61982
-    ),
-
-    reset_y=config["training"].get(
-        "reset_y",
-        -2.0
-    ),
-
-    reset_yaw_base=config["training"].get(
-        "reset_yaw_base",
-        1.5708
-    ),
-
-    reset_yaw_jitter=config["training"].get(
-        "reset_yaw_jitter",
-        0.35
+        task,
+        action_duration=config[
+            "training"
+        ].get(
+            "action_duration",
+            0.1
+        )
     )
-)
+
+    # -------------------------------------------------
+    # Create DQN agent
+    # -------------------------------------------------
 
     agent = create_agent(
-        config,
-        task
+    config,
+    task)
+
+    print(
+        "Agent:",
+        agent.__class__.__name__
     )
 
-    buffer = ReplayBuffer()
-
-    # --------------------------------------------------
+    # -------------------------------------------------
     # Paths
-    # --------------------------------------------------
+    # -------------------------------------------------
 
-    model_path = config["paths"]["model"]
+    model_path = config[
+        "paths"
+    ]["model"]
 
-    replay_buffer_path = config["paths"]["replay_buffer"]
+    replay_path = config[
+        "paths"
+    ]["replay_buffer"]
 
-    reward_log_path = config["paths"]["reward_log"]
+    reward_log_path = config[
+        "paths"
+    ]["reward_log"]
 
     os.makedirs(
         os.path.dirname(model_path),
         exist_ok=True
     )
 
-    os.makedirs(
-        os.path.dirname(replay_buffer_path),
-        exist_ok=True
+    # -------------------------------------------------
+    # Replay buffer
+    # -------------------------------------------------
+
+    replay_capacity = config.get(
+        "replay_buffer",
+        {}
+    ).get(
+        "capacity",
+        100000
     )
 
-    os.makedirs(
-        os.path.dirname(reward_log_path),
-        exist_ok=True
+    replay_buffer = load_replay_buffer(
+        replay_path,
+        replay_capacity
     )
 
-    # --------------------------------------------------
-    # Load checkpoints
-    # --------------------------------------------------
+    print(
+        "Replay Buffer:",
+        replay_buffer.__class__.__name__
+    )
 
-    if os.path.exists(model_path):
-        agent.load(model_path)
+    # -------------------------------------------------
+    # Load existing checkpoint
+    # -------------------------------------------------
 
-        print(
-            f"Loaded model checkpoint: {model_path}"
-        )
+    if os.path.exists(
+        model_path
+    ):
+        try:
+            agent.load(
+                model_path
+            )
 
-    if os.path.exists(replay_buffer_path):
-        with open(
-            replay_buffer_path,
-            "rb"
-        ) as f:
-            buffer.buffer = pickle.load(f)
+            print(
+                "Loaded model checkpoint:",
+                model_path
+            )
 
-        print(
-            f"Loaded replay buffer: {replay_buffer_path}"
-        )
+        except Exception as error:
+            print(
+                "Could not load checkpoint:",
+                error
+            )
 
-    # --------------------------------------------------
-    # Training settings
-    # --------------------------------------------------
+    # -------------------------------------------------
+    # Training configuration
+    # -------------------------------------------------
 
-    episodes = config["training"]["episodes"]
+    episodes = config[
+        "training"
+    ].get(
+        "episodes",
+        30
+    )
 
-    batch_size = config["training"]["batch_size"]
+    batch_size = config[
+        "training"
+    ].get(
+        "batch_size",
+        32
+    )
 
-    checkpoint_interval = config["training"].get(
+    max_steps_per_episode = config[
+        "training"
+    ].get(
+        "max_steps_per_episode",
+        200
+    )
+
+    checkpoint_interval = config[
+        "training"
+    ].get(
         "checkpoint_interval",
         10
     )
-
-    max_steps = config["training"][
-        "max_steps_per_episode"
-    ]
 
     log_interval_steps = config[
         "training"
@@ -154,40 +316,68 @@ def main():
         20
     )
 
-    # --------------------------------------------------
-    # Training loop
-    # --------------------------------------------------
+    # -------------------------------------------------
+    # Main training loop
+    # -------------------------------------------------
 
-    for episode in range(episodes):
+    for episode in range(
+        episodes
+    ):
+
+        # =============================================
+        # IMPORTANT:
+        # RESET GAZEBO AT THE START OF EVERY EPISODE
+        # =============================================
 
         state = env.reset()
 
-        total_reward = 0.0
+        if state is None:
+            rospy.logwarn(
+                "Environment reset returned no state."
+            )
 
+            continue
+
+        total_reward = 0.0
+        step_count = 0
         done = False
 
-        step_count = 0
+        episode_start_time = (
+            time.time()
+        )
 
-        episode_start_time = time.time()
+        # ---------------------------------------------
+        # Episode loop
+        # ---------------------------------------------
 
         while (
             not done
-            and step_count < max_steps
-            and not rospy.is_shutdown()
+            and
+            step_count
+            < max_steps_per_episode
+            and
+            not rospy.is_shutdown()
         ):
 
+            # Select action
             action = agent.select_action(
                 state
             )
 
-            next_state, reward, done = env.step(
+            # Execute action
+            (
+                next_state,
+                reward,
+                done
+            ) = env.step(
                 action
             )
 
             if next_state is None:
                 continue
 
-            buffer.push(
+            # Store transition
+            replay_buffer.push(
                 state,
                 action,
                 reward,
@@ -195,10 +385,15 @@ def main():
                 done
             )
 
-            agent.train(
-                buffer,
-                batch_size=batch_size
-            )
+            # Train DQN
+            if (
+                len(replay_buffer)
+                >= batch_size
+            ):
+                agent.train(
+                    replay_buffer,
+                    batch_size
+                )
 
             state = next_state
 
@@ -206,15 +401,16 @@ def main():
 
             step_count += 1
 
-            # ------------------------------------------
-            # Reduced step logging
-            # ------------------------------------------
+            # -----------------------------------------
+            # Progress output
+            # -----------------------------------------
 
             if (
                 step_count
                 % log_interval_steps
                 == 0
             ):
+
                 elapsed = (
                     time.time()
                     - episode_start_time
@@ -228,15 +424,22 @@ def main():
 
                 print(
                     f"Episode {episode} | "
-                    f"Step {step_count}/{max_steps} | "
-                    f"Reward {total_reward:.2f} | "
-                    f"Epsilon {agent.epsilon:.3f} | "
-                    f"Speed {steps_per_second:.2f} steps/s"
+                    f"Step {step_count}/"
+                    f"{max_steps_per_episode} | "
+                    f"Reward "
+                    f"{total_reward:.2f} | "
+                    f"Epsilon "
+                    f"{agent.epsilon:.3f} | "
+                    f"Speed "
+                    f"{steps_per_second:.2f} "
+                    f"steps/s"
                 )
 
-        # --------------------------------------------------
-        # Episode summary
-        # --------------------------------------------------
+        # -------------------------------------------------
+        # Episode finished
+        # -------------------------------------------------
+
+        env.robot.stop()
 
         episode_time = (
             time.time()
@@ -249,20 +452,20 @@ def main():
             else 0.0
         )
 
-        if (
-            step_count >= max_steps
-            and not done
-        ):
+        if done:
+
             print(
-                f"Episode {episode} ended because "
-                f"maximum step limit "
-                f"({max_steps}) was reached."
+                f"Episode {episode} "
+                f"completed successfully."
             )
 
-        elif done:
+        else:
+
             print(
-                f"Episode {episode} completed "
-                f"successfully."
+                f"Episode {episode} ended "
+                f"because maximum step limit "
+                f"({max_steps_per_episode}) "
+                f"was reached."
             )
 
         print(
@@ -270,38 +473,38 @@ def main():
             f"Steps: {step_count} | "
             f"Reward: {total_reward:.2f} | "
             f"Time: {episode_time:.2f}s | "
-            f"Speed: {steps_per_second:.2f} steps/s"
+            f"Speed: "
+            f"{steps_per_second:.2f} "
+            f"steps/s"
         )
 
-        # --------------------------------------------------
-        # Episode-based epsilon decay
-        # --------------------------------------------------
+        # -------------------------------------------------
+        # Save episode results
+        # -------------------------------------------------
+
+        append_episode_log(
+            reward_log_path,
+            episode,
+            total_reward,
+            step_count,
+            done,
+            episode_time,
+            steps_per_second,
+            agent.epsilon
+        )
+
+        # -------------------------------------------------
+        # Decay epsilon ONCE PER EPISODE
+        # -------------------------------------------------
 
         agent.decay_epsilon()
 
-        # --------------------------------------------------
-        # Logging
-        # --------------------------------------------------
-
-        with open(
-            reward_log_path,
-            "a"
-        ) as f:
-            f.write(
-                f"{episode},"
-                f"{total_reward},"
-                f"{step_count},"
-                f"{done},"
-                f"{episode_time},"
-                f"{steps_per_second}\n"
-            )
-
-        # --------------------------------------------------
-        # Checkpoints
-        # --------------------------------------------------
+        # -------------------------------------------------
+        # Save checkpoint
+        # -------------------------------------------------
 
         if (
-            episode
+            (episode + 1)
             % checkpoint_interval
             == 0
         ):
@@ -310,16 +513,35 @@ def main():
                 model_path
             )
 
-            with open(
-                replay_buffer_path,
-                "wb"
-            ) as f:
-                pickle.dump(
-                    buffer.buffer,
-                    f
-                )
+            save_replay_buffer(
+                replay_buffer,
+                replay_path
+            )
 
-    print("Training finished")
+            print(
+                f"Checkpoint saved "
+                f"after episode "
+                f"{episode + 1}"
+            )
+
+    # -------------------------------------------------
+    # Final save
+    # -------------------------------------------------
+
+    env.robot.stop()
+
+    agent.save(
+        model_path
+    )
+
+    save_replay_buffer(
+        replay_buffer,
+        replay_path
+    )
+
+    print(
+        "Training finished"
+    )
 
 
 if __name__ == "__main__":

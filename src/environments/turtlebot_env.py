@@ -1,6 +1,6 @@
-import random
-
 import rospy
+
+from std_srvs.srv import Empty
 
 from perception.yolo_state import YoloStateProvider
 from robots.turtlebot3 import TurtleBot3
@@ -11,63 +11,82 @@ class TurtlebotEnv:
     def __init__(
         self,
         task,
-        action_duration=0.1,
-        reset_x=-1.61982,
-        reset_y=-2.0,
-        reset_yaw_base=1.5708,
-        reset_yaw_jitter=0.35
+        action_duration=0.1
     ):
         self.task = task
-
         self.action_duration = action_duration
 
-        self.reset_x = reset_x
-        self.reset_y = reset_y
-
-        self.reset_yaw_base = reset_yaw_base
-        self.reset_yaw_jitter = reset_yaw_jitter
-
         self.robot = TurtleBot3()
-
         self.perception = YoloStateProvider()
 
+        rospy.wait_for_service(
+            "/gazebo/reset_world"
+        )
+
+        self.reset_world = rospy.ServiceProxy(
+            "/gazebo/reset_world",
+            Empty
+        )
+
+        # Fixed training pose based on the
+        # actual cricket ball position in Gazebo.
+        #
+        # Cricket ball:
+        # x = -2.46246
+        # y = -3.96862
+        #
+        # Robot starts 1.5 m behind it,
+        # facing toward +Y.
+        self.robot_reset_x = -2.46246
+        self.robot_reset_y = -5.46862
+        self.robot_reset_yaw = 1.5708
+
     def reset(self):
-        # Stop any movement left from previous episode
+        # Stop any command from the previous episode.
         self.robot.stop()
 
-        # Remember current perception sequence so we can
-        # wait for a new YOLO result after teleporting.
+        rospy.sleep(0.1)
+
+        # Remember current perception sequence.
+        # We will wait for a NEW YOLO observation
+        # after resetting the robot.
         previous_sequence = (
             self.perception.get_sequence()
         )
 
-        # Small random orientation around the direction
-        # facing the Stop Sign.
-        direction = random.choice(
-            [-1.0, 1.0]
-        )
+        # Reset the Gazebo world first.
+        # This restores the cricket ball and
+        # other world objects.
+        try:
+            self.reset_world()
 
-        yaw_offset = direction * random.uniform(
-            0.20,
-            0.35
-        )
+        except rospy.ServiceException as error:
+            rospy.logerr(
+                f"Gazebo world reset failed: {error}"
+            )
 
-        reset_yaw = (
-            self.reset_yaw_base
-            + yaw_offset
-        )
-        # Reset TurtleBot near the target.
+        # Give Gazebo time to finish the reset.
+        rospy.sleep(0.2)
+
+        # Now manually put TurtleBot near
+        # the cricket ball.
         self.robot.reset_pose(
-            x=self.reset_x,
-            y=self.reset_y,
-            yaw=reset_yaw
+            x=self.robot_reset_x,
+            y=self.robot_reset_y,
+            yaw=self.robot_reset_yaw
         )
 
-        # Reset task-specific state such as previous_error.
+        # Give Gazebo time to apply the teleport.
+        rospy.sleep(0.2)
+
+        # Make sure the robot starts stationary.
+        self.robot.stop()
+
+        # Reset task-specific internal state.
         self.task.reset()
 
-        # Wait for a genuinely new YOLO observation
-        # after the Gazebo teleport.
+        # Wait for a fresh YOLO observation
+        # generated AFTER the robot was moved.
         observation = (
             self.perception.wait_for_new_observation(
                 previous_sequence,
@@ -80,7 +99,7 @@ class TurtlebotEnv:
             and not rospy.is_shutdown()
         ):
             rospy.logwarn(
-                "Waiting for fresh YOLO observation..."
+                "Waiting for fresh YOLO observation after episode reset..."
             )
 
             previous_sequence = (
@@ -95,10 +114,10 @@ class TurtlebotEnv:
             )
 
         rospy.loginfo(
-            f"Episode reset | "
-            f"x={self.reset_x:.2f} "
-            f"y={self.reset_y:.2f} "
-            f"yaw={reset_yaw:.3f}"
+            "Episode reset | "
+            f"x={self.robot_reset_x:.2f} "
+            f"y={self.robot_reset_y:.2f} "
+            f"yaw={self.robot_reset_yaw:.3f}"
         )
 
         return self.task.get_state(
@@ -106,35 +125,45 @@ class TurtlebotEnv:
         )
 
     def step(self, action_index):
-        # Convert RL action number to semantic robot command.
+        # Convert DQN action index into
+        # semantic task action.
         action = self.task.get_action(
             action_index
         )
 
+        # Execute robot command.
         self.robot.execute_action(
             action
         )
 
-        # Allow robot to execute action.
+        # Let the robot execute the action.
         rospy.sleep(
             self.action_duration
         )
 
+        # Get latest YOLO observation.
         observation = (
             self.perception.get_observation()
         )
 
         if observation is None:
-            return None, 0.0, False
+            return (
+                None,
+                0.0,
+                False
+            )
 
+        # Convert perception into RL state.
         next_state = self.task.get_state(
             observation
         )
 
+        # Calculate reward.
         reward = self.task.compute_reward(
             observation
         )
 
+        # Check task success.
         done = self.task.is_done(
             observation
         )
