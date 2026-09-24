@@ -13,6 +13,7 @@ training:
   episodes: 500
   batch_size: 32
   checkpoint_interval: 10
+  max_steps_per_episode: 200
 
 agent:
   gamma: 0.99

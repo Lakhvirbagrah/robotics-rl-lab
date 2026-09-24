@@ -113,6 +113,8 @@ def main():
         10
     )
 
+    max_steps = config["training"]["max_steps_per_episode"]
+
     # --------------------------------------------------
     # Training loop
     # --------------------------------------------------
@@ -123,8 +125,13 @@ def main():
 
         total_reward = 0.0
         done = False
+        step_count = 0
 
-        while not done and not rospy.is_shutdown():
+        while (
+            not done
+            and step_count < max_steps
+            and not rospy.is_shutdown()
+        ):
 
             action = agent.select_action(state)
 
@@ -150,11 +157,30 @@ def main():
 
             total_reward += reward
 
+            step_count += 1
+
             print(
                 f"Episode {episode} | "
+                f"Step: {step_count}/{max_steps} | "
                 f"TotalReward: {total_reward:.2f} | "
                 f"Epsilon: {agent.epsilon:.3f} | "
                 f"Reward: {reward:.3f}"
+            )
+
+        # --------------------------------------------------
+        # Episode end reason
+        # --------------------------------------------------
+
+        if step_count >= max_steps and not done:
+            print(
+                f"Episode {episode} ended because maximum "
+                f"step limit ({max_steps}) was reached."
+            )
+
+        elif done:
+            print(
+                f"Episode {episode} completed successfully "
+                f"in {step_count} steps."
             )
 
         # --------------------------------------------------
@@ -166,7 +192,7 @@ def main():
             "a"
         ) as f:
             f.write(
-                f"{episode},{total_reward}\n"
+                f"{episode},{total_reward},{step_count},{done}\n"
             )
 
         # --------------------------------------------------
