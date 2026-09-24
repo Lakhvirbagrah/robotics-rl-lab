@@ -21,6 +21,7 @@ agent:
   epsilon_start: 1.0
   epsilon_min: 0.05
   epsilon_decay: 0.995
+  target_update_interval: 100
 
 paths:
   model: models/object_centering_dqn.pth

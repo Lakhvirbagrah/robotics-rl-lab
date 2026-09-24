@@ -29,15 +29,20 @@ class Agent:
         epsilon=1.0,
         epsilon_min=0.05,
         epsilon_decay=0.995,
-        lr=1e-3
+        lr=1e-3,
+        target_update_interval=100
     ):
         self.state_dim = state_dim
         self.action_dim = action_dim
 
         self.gamma = gamma
+
         self.epsilon = epsilon
         self.epsilon_min = epsilon_min
         self.epsilon_decay = epsilon_decay
+
+        self.target_update_interval = target_update_interval
+        self.training_steps = 0
 
         self.device = torch.device(
             "cuda" if torch.cuda.is_available() else "cpu"
@@ -57,6 +62,8 @@ class Agent:
             self.q_net.state_dict()
         )
 
+        self.target_net.eval()
+
         self.optimizer = optim.Adam(
             self.q_net.parameters(),
             lr=lr
@@ -66,7 +73,9 @@ class Agent:
 
     def select_action(self, state):
         if np.random.rand() < self.epsilon:
-            return np.random.randint(self.action_dim)
+            return np.random.randint(
+                self.action_dim
+            )
 
         state_tensor = torch.tensor(
             state,
@@ -75,15 +84,29 @@ class Agent:
         ).unsqueeze(0)
 
         with torch.no_grad():
-            q_values = self.q_net(state_tensor)
+            q_values = self.q_net(
+                state_tensor
+            )
 
-        return q_values.argmax(dim=1).item()
+        return q_values.argmax(
+            dim=1
+        ).item()
 
-    def train(self, replay_buffer, batch_size=32):
+    def train(
+        self,
+        replay_buffer,
+        batch_size=32
+    ):
         if len(replay_buffer) < batch_size:
-            return
+            return None
 
-        states, actions, rewards, next_states, dones = replay_buffer.sample(
+        (
+            states,
+            actions,
+            rewards,
+            next_states,
+            dones
+        ) = replay_buffer.sample(
             batch_size
         )
 
@@ -117,7 +140,9 @@ class Agent:
             device=self.device
         )
 
-        q_values = self.q_net(states)
+        q_values = self.q_net(
+            states
+        )
 
         current_q = q_values.gather(
             1,
@@ -139,9 +164,28 @@ class Agent:
         )
 
         self.optimizer.zero_grad()
+
         loss.backward()
+
         self.optimizer.step()
 
+        self.training_steps += 1
+
+        if (
+            self.training_steps
+            % self.target_update_interval
+            == 0
+        ):
+            self.update_target_network()
+
+        return loss.item()
+
+    def update_target_network(self):
+        self.target_net.load_state_dict(
+            self.q_net.state_dict()
+        )
+
+    def decay_epsilon(self):
         if self.epsilon > self.epsilon_min:
             self.epsilon *= self.epsilon_decay
 
@@ -155,7 +199,8 @@ class Agent:
                 "target_net": self.target_net.state_dict(),
                 "epsilon": self.epsilon,
                 "state_dim": self.state_dim,
-                "action_dim": self.action_dim
+                "action_dim": self.action_dim,
+                "training_steps": self.training_steps
             },
             path
         )
@@ -177,4 +222,9 @@ class Agent:
         self.epsilon = checkpoint.get(
             "epsilon",
             self.epsilon
+        )
+
+        self.training_steps = checkpoint.get(
+            "training_steps",
+            0
         )

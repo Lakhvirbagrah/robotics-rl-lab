@@ -194,7 +194,7 @@ def main():
             f.write(
                 f"{episode},{total_reward},{step_count},{done}\n"
             )
-
+        agent.decay_epsilon()
         # --------------------------------------------------
         # Checkpoints
         # --------------------------------------------------

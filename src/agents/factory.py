@@ -12,7 +12,8 @@ def create_agent(config, task):
             epsilon=config["agent"]["epsilon_start"],
             epsilon_min=config["agent"]["epsilon_min"],
             epsilon_decay=config["agent"]["epsilon_decay"],
-            lr=config["agent"]["learning_rate"]
+            lr=config["agent"]["learning_rate"],
+            target_update_interval=config["agent"]["target_update_interval"]
         )
 
     raise ValueError(f"Unknown algorithm: {algorithm_name}")
