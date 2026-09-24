@@ -4,8 +4,9 @@ from robots.turtlebot3 import TurtleBot3
 
 
 class TurtlebotEnv:
-    def __init__(self, task):
+    def __init__(self, task, action_duration=0.2):
         self.task = task
+        self.action_duration = action_duration
         self.observation = None
         self.perception = YoloStateProvider()
 
@@ -26,7 +27,7 @@ class TurtlebotEnv:
         
         self.execute_action(action)
 
-        rospy.sleep(0.2)
+        rospy.sleep(self.action_duration)
         observation = self.perception.get_observation()
 
         if observation is None:

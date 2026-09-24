@@ -3,6 +3,7 @@
 import argparse
 import os
 import pickle
+import time
 import yaml
 
 import rospy
@@ -46,7 +47,12 @@ def main():
 
     task = create_task(config)
 
-    env = TurtlebotEnv(task)
+    env = TurtlebotEnv(
+    task,
+    action_duration=config["training"].get(
+        "action_duration",
+        0.2
+    ))
 
     agent = create_agent(
         config,
@@ -60,7 +66,9 @@ def main():
     # --------------------------------------------------
 
     model_path = config["paths"]["model"]
+
     replay_buffer_path = config["paths"]["replay_buffer"]
+
     reward_log_path = config["paths"]["reward_log"]
 
     os.makedirs(
@@ -113,7 +121,16 @@ def main():
         10
     )
 
-    max_steps = config["training"]["max_steps_per_episode"]
+    max_steps = config["training"][
+        "max_steps_per_episode"
+    ]
+
+    log_interval_steps = config[
+        "training"
+    ].get(
+        "log_interval_steps",
+        20
+    )
 
     # --------------------------------------------------
     # Training loop
@@ -124,8 +141,12 @@ def main():
         state = env.reset()
 
         total_reward = 0.0
+
         done = False
+
         step_count = 0
+
+        episode_start_time = time.time()
 
         while (
             not done
@@ -133,9 +154,13 @@ def main():
             and not rospy.is_shutdown()
         ):
 
-            action = agent.select_action(state)
+            action = agent.select_action(
+                state
+            )
 
-            next_state, reward, done = env.step(action)
+            next_state, reward, done = env.step(
+                action
+            )
 
             if next_state is None:
                 continue
@@ -159,29 +184,78 @@ def main():
 
             step_count += 1
 
-            print(
-                f"Episode {episode} | "
-                f"Step: {step_count}/{max_steps} | "
-                f"TotalReward: {total_reward:.2f} | "
-                f"Epsilon: {agent.epsilon:.3f} | "
-                f"Reward: {reward:.3f}"
-            )
+            # ------------------------------------------
+            # Reduced step logging
+            # ------------------------------------------
+
+            if (
+                step_count
+                % log_interval_steps
+                == 0
+            ):
+                elapsed = (
+                    time.time()
+                    - episode_start_time
+                )
+
+                steps_per_second = (
+                    step_count / elapsed
+                    if elapsed > 0
+                    else 0.0
+                )
+
+                print(
+                    f"Episode {episode} | "
+                    f"Step {step_count}/{max_steps} | "
+                    f"Reward {total_reward:.2f} | "
+                    f"Epsilon {agent.epsilon:.3f} | "
+                    f"Speed {steps_per_second:.2f} steps/s"
+                )
 
         # --------------------------------------------------
-        # Episode end reason
+        # Episode summary
         # --------------------------------------------------
 
-        if step_count >= max_steps and not done:
+        episode_time = (
+            time.time()
+            - episode_start_time
+        )
+
+        steps_per_second = (
+            step_count / episode_time
+            if episode_time > 0
+            else 0.0
+        )
+
+        if (
+            step_count >= max_steps
+            and not done
+        ):
             print(
-                f"Episode {episode} ended because maximum "
-                f"step limit ({max_steps}) was reached."
+                f"Episode {episode} ended because "
+                f"maximum step limit "
+                f"({max_steps}) was reached."
             )
 
         elif done:
             print(
-                f"Episode {episode} completed successfully "
-                f"in {step_count} steps."
+                f"Episode {episode} completed "
+                f"successfully."
             )
+
+        print(
+            f"Episode {episode} finished | "
+            f"Steps: {step_count} | "
+            f"Reward: {total_reward:.2f} | "
+            f"Time: {episode_time:.2f}s | "
+            f"Speed: {steps_per_second:.2f} steps/s"
+        )
+
+        # --------------------------------------------------
+        # Episode-based epsilon decay
+        # --------------------------------------------------
+
+        agent.decay_epsilon()
 
         # --------------------------------------------------
         # Logging
@@ -192,16 +266,27 @@ def main():
             "a"
         ) as f:
             f.write(
-                f"{episode},{total_reward},{step_count},{done}\n"
+                f"{episode},"
+                f"{total_reward},"
+                f"{step_count},"
+                f"{done},"
+                f"{episode_time},"
+                f"{steps_per_second}\n"
             )
-        agent.decay_epsilon()
+
         # --------------------------------------------------
         # Checkpoints
         # --------------------------------------------------
 
-        if episode % checkpoint_interval == 0:
+        if (
+            episode
+            % checkpoint_interval
+            == 0
+        ):
 
-            agent.save(model_path)
+            agent.save(
+                model_path
+            )
 
             with open(
                 replay_buffer_path,
