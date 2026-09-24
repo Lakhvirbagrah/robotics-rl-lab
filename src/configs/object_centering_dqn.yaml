@@ -13,11 +13,17 @@ training:
   episodes: 3
   batch_size: 32
   checkpoint_interval: 10
+
   max_steps_per_episode: 200
   log_interval_steps: 20
+
   action_duration: 0.10
-  reset_yaw_min: -0.6
-  reset_yaw_max: 0.6
+
+  reset_x: -1.61982
+  reset_y: -2.0
+
+  reset_yaw_base: 1.5708
+  reset_yaw_jitter: 0.35
 
 agent:
   gamma: 0.99

@@ -49,18 +49,32 @@ def main():
 
     env = TurtlebotEnv(
     task,
+
     action_duration=config["training"].get(
         "action_duration",
-        0.2
+        0.1
     ),
-    reset_yaw_min=config["training"].get(
-        "reset_yaw_min",
-        0.0
+
+    reset_x=config["training"].get(
+        "reset_x",
+        -1.61982
     ),
-    reset_yaw_max=config["training"].get(
-        "reset_yaw_max",
-        0.0
-    ))
+
+    reset_y=config["training"].get(
+        "reset_y",
+        -2.0
+    ),
+
+    reset_yaw_base=config["training"].get(
+        "reset_yaw_base",
+        1.5708
+    ),
+
+    reset_yaw_jitter=config["training"].get(
+        "reset_yaw_jitter",
+        0.35
+    )
+)
 
     agent = create_agent(
         config,
