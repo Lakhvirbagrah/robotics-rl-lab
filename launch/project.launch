@@ -22,7 +22,5 @@
       args="-urdf -model turtlebot3 -param robot_description -x 0 -y 0 -z 0"
   />
 
-  <!-- Teleop -->
-  <include file="$(find turtlebot3_teleop)/launch/turtlebot3_teleop_key.launch"/>
 
 </launch>

@@ -10,25 +10,31 @@ class TurtleBot3:
             queue_size=10
         )
 
-def execute_action(self, action):
-    cmd = Twist()
+    def execute_action(self, action):
+        cmd = Twist()
 
-    if action == "forward":
-        cmd.linear.x = 0.2
+        if action == "forward":
+            cmd.linear.x = 0.2
 
-    elif action == "backward":
-        cmd.linear.x = -0.2
+        elif action == "backward":
+            cmd.linear.x = -0.2
 
-    elif action == "turn_left":
-        cmd.angular.z = 0.5
+        elif action == "turn_left":
+            cmd.angular.z = 0.5
 
-    elif action == "turn_right":
-        cmd.angular.z = -0.5
+        elif action == "turn_right":
+            cmd.angular.z = -0.5
 
-    elif action == "stop":
-        pass
+        elif action == "stop":
+            pass
 
-    else:
-        raise ValueError(f"Unknown robot action: {action}")
+        else:
+            raise ValueError(
+                f"Unknown robot action: {action}"
+            )
 
-    self.cmd_pub.publish(cmd)
+        self.cmd_pub.publish(cmd)
+
+    def stop(self):
+        cmd = Twist()
+        self.cmd_pub.publish(cmd)
