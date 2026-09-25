@@ -2,8 +2,10 @@
 
 import argparse
 import csv
+import math
 import os
 import pickle
+import random
 import time
 
 import mlflow
@@ -25,7 +27,9 @@ try:
     import pynvml
 
     NVIDIA_AVAILABLE = True
+
 except ImportError:
+
     NVIDIA_AVAILABLE = False
 
 
@@ -34,28 +38,43 @@ except ImportError:
 # ============================================================
 
 def load_config(config_path):
-    with open(config_path, "r") as file:
-        return yaml.safe_load(file)
+
+    with open(
+        config_path,
+        "r"
+    ) as file:
+
+        return yaml.safe_load(
+            file
+        )
 
 
 # ============================================================
-# System monitoring
+# System metrics
 # ============================================================
 
 def get_system_metrics():
+
     metrics = {
-        "cpu_percent": psutil.cpu_percent(),
-        "ram_percent": psutil.virtual_memory().percent,
+        "cpu_percent":
+            psutil.cpu_percent(),
+
+        "ram_percent":
+            psutil.virtual_memory().percent,
     }
 
     if not NVIDIA_AVAILABLE:
+
         return metrics
 
     try:
+
         pynvml.nvmlInit()
 
         handle = (
-            pynvml.nvmlDeviceGetHandleByIndex(0)
+            pynvml.nvmlDeviceGetHandleByIndex(
+                0
+            )
         )
 
         temperature = (
@@ -77,7 +96,7 @@ def get_system_metrics():
             )
         )
 
-        power_watts = (
+        power = (
             pynvml.nvmlDeviceGetPowerUsage(
                 handle
             )
@@ -86,49 +105,56 @@ def get_system_metrics():
 
         metrics.update(
             {
-                "gpu_temperature_c": float(
-                    temperature
-                ),
-                "gpu_utilization_percent": float(
-                    utilization.gpu
-                ),
-                "gpu_memory_used_mb": float(
-                    memory.used
-                    / 1024
-                    / 1024
-                ),
-                "gpu_memory_total_mb": float(
-                    memory.total
-                    / 1024
-                    / 1024
-                ),
-                "gpu_power_watts": float(
-                    power_watts
-                ),
+                "gpu_temperature_c":
+                    float(temperature),
+
+                "gpu_utilization_percent":
+                    float(utilization.gpu),
+
+                "gpu_memory_used_mb":
+                    float(
+                        memory.used
+                        / 1024
+                        / 1024
+                    ),
+
+                "gpu_memory_total_mb":
+                    float(
+                        memory.total
+                        / 1024
+                        / 1024
+                    ),
+
+                "gpu_power_watts":
+                    float(power),
             }
         )
 
     except Exception as error:
+
         rospy.logwarn(
-            f"GPU monitoring unavailable: {error}"
+            f"GPU monitoring unavailable: "
+            f"{error}"
         )
 
     return metrics
 
 
 # ============================================================
-# Replay buffer
+# Replay buffer helpers
 # ============================================================
 
 def save_replay_buffer(
     replay_buffer,
     replay_path
 ):
+
     directory = os.path.dirname(
         replay_path
     )
 
     if directory:
+
         os.makedirs(
             directory,
             exist_ok=True
@@ -138,6 +164,7 @@ def save_replay_buffer(
         replay_path,
         "wb"
     ) as file:
+
         pickle.dump(
             replay_buffer,
             file
@@ -148,24 +175,29 @@ def load_replay_buffer(
     replay_path,
     capacity=100000
 ):
+
     if os.path.exists(
         replay_path
     ):
+
         try:
+
             with open(
                 replay_path,
                 "rb"
             ) as file:
-                loaded_buffer = pickle.load(
-                    file
+
+                loaded_buffer = (
+                    pickle.load(
+                        file
+                    )
                 )
 
-            # Make sure this is the new reusable
-            # ReplayBuffer and not an old deque.
             if hasattr(
                 loaded_buffer,
                 "push"
             ):
+
                 print(
                     "Loaded replay buffer:",
                     len(loaded_buffer),
@@ -180,6 +212,7 @@ def load_replay_buffer(
             )
 
         except Exception as error:
+
             print(
                 "Could not load replay buffer:",
                 error
@@ -203,13 +236,17 @@ def append_episode_log(
     epsilon,
     average_loss,
     episode_time,
-    steps_per_second
+    steps_per_second,
+    reset_yaw,
+    reset_yaw_offset_deg
 ):
+
     directory = os.path.dirname(
         log_path
     )
 
     if directory:
+
         os.makedirs(
             directory,
             exist_ok=True
@@ -230,6 +267,7 @@ def append_episode_log(
         )
 
         if not file_exists:
+
             writer.writerow(
                 [
                     "episode",
@@ -240,6 +278,8 @@ def append_episode_log(
                     "average_loss",
                     "episode_time",
                     "steps_per_second",
+                    "reset_yaw",
+                    "reset_yaw_offset_deg",
                 ]
             )
 
@@ -253,17 +293,145 @@ def append_episode_log(
                 average_loss,
                 episode_time,
                 steps_per_second,
+                reset_yaw,
+                reset_yaw_offset_deg,
             ]
         )
 
 
 # ============================================================
-# MLflow helpers
+# Randomized reset
 # ============================================================
 
-def setup_mlflow(config, project_root):
+def reset_environment(
+    env,
+    config
+):
 
-    tracking_uri = "http://127.0.0.1:5000"
+    training_config = (
+        config.get(
+            "training",
+            {}
+        )
+    )
+
+    reset_config = (
+        training_config.get(
+            "reset_randomization",
+            {}
+        )
+    )
+
+    enabled = (
+        reset_config.get(
+            "enabled",
+            False
+        )
+    )
+
+    # --------------------------------------------------------
+    # Original fixed reset
+    # --------------------------------------------------------
+
+    if not enabled:
+
+        state = env.reset()
+
+        return (
+            state,
+            None,
+            0.0
+        )
+
+    # --------------------------------------------------------
+    # Randomized yaw reset
+    # --------------------------------------------------------
+
+    reset_x = (
+        reset_config.get(
+            "x",
+            -2.46246
+        )
+    )
+
+    reset_y = (
+        reset_config.get(
+            "y",
+            -5.46862
+        )
+    )
+
+    base_yaw = (
+        reset_config.get(
+            "base_yaw",
+            1.5708
+        )
+    )
+
+    yaw_min_deg = (
+        reset_config.get(
+            "yaw_offset_min_deg",
+            -45.0
+        )
+    )
+
+    yaw_max_deg = (
+        reset_config.get(
+            "yaw_offset_max_deg",
+            -5.0
+        )
+    )
+
+    yaw_offset_deg = (
+        random.uniform(
+            yaw_min_deg,
+            yaw_max_deg
+        )
+    )
+
+    yaw_offset_rad = (
+        math.radians(
+            yaw_offset_deg
+        )
+    )
+
+    reset_yaw = (
+        base_yaw
+        + yaw_offset_rad
+    )
+
+    rospy.loginfo(
+        f"Randomized reset | "
+        f"yaw offset="
+        f"{yaw_offset_deg:+.2f} deg | "
+        f"yaw={reset_yaw:.4f}"
+    )
+
+    state = env.reset(
+        x=reset_x,
+        y=reset_y,
+        yaw=reset_yaw
+    )
+
+    return (
+        state,
+        reset_yaw,
+        yaw_offset_deg
+    )
+
+
+# ============================================================
+# MLflow
+# ============================================================
+
+def setup_mlflow(
+    config,
+    project_root
+):
+
+    tracking_uri = (
+        "http://127.0.0.1:5000"
+    )
 
     mlflow.set_tracking_uri(
         tracking_uri
@@ -275,7 +443,9 @@ def setup_mlflow(config, project_root):
     )
 
     mlflow.set_experiment(
-        config["experiment"]["name"]
+        config[
+            "experiment"
+        ]["name"]
     )
 
 
@@ -286,65 +456,131 @@ def log_mlflow_parameters(
     batch_size,
     max_steps
 ):
-    training_config = config.get(
-        "training",
-        {}
+
+    training_config = (
+        config.get(
+            "training",
+            {}
+        )
     )
 
-    agent_config = config.get(
-        "agent",
-        {}
+    agent_config = (
+        config.get(
+            "agent",
+            {}
+        )
     )
 
-    algorithm_config = config.get(
-        "algorithm",
-        {}
+    algorithm_config = (
+        config.get(
+            "algorithm",
+            {}
+        )
+    )
+
+    reset_config = (
+        training_config.get(
+            "reset_randomization",
+            {}
+        )
     )
 
     parameters = {
-        "algorithm": algorithm_config.get(
-            "name",
-            "unknown"
-        ),
-        "state_dim": task.get_state_dim(),
-        "action_dim": task.get_action_dim(),
-        "actions": str(
-            task.get_actions()
-        ),
-        "episodes": episodes,
-        "batch_size": batch_size,
-        "max_steps_per_episode": max_steps,
-        "action_duration": training_config.get(
-            "action_duration",
-            0.1
-        ),
-        "gamma": agent_config.get(
-            "gamma",
-            "not_set"
-        ),
-        "learning_rate": agent_config.get(
-            "learning_rate",
-            "not_set"
-        ),
-        "epsilon_start": agent_config.get(
-            "epsilon_start",
-            "not_set"
-        ),
-        "epsilon_min": agent_config.get(
-            "epsilon_min",
-            "not_set"
-        ),
-        "epsilon_decay": agent_config.get(
-            "epsilon_decay",
-            "not_set"
-        ),
-        "target_update_interval": (
+
+        "algorithm":
+            algorithm_config.get(
+                "name",
+                "unknown"
+            ),
+
+        "state_dim":
+            task.get_state_dim(),
+
+        "action_dim":
+            task.get_action_dim(),
+
+        "actions":
+            str(
+                task.get_actions()
+            ),
+
+        "episodes":
+            episodes,
+
+        "batch_size":
+            batch_size,
+
+        "max_steps_per_episode":
+            max_steps,
+
+        "action_duration":
+            training_config.get(
+                "action_duration",
+                0.1
+            ),
+
+        "gamma":
+            agent_config.get(
+                "gamma",
+                "not_set"
+            ),
+
+        "learning_rate":
+            agent_config.get(
+                "learning_rate",
+                "not_set"
+            ),
+
+        "epsilon_start":
+            agent_config.get(
+                "epsilon_start",
+                "not_set"
+            ),
+
+        "epsilon_min":
+            agent_config.get(
+                "epsilon_min",
+                "not_set"
+            ),
+
+        "epsilon_decay":
+            agent_config.get(
+                "epsilon_decay",
+                "not_set"
+            ),
+
+        "target_update_interval":
             agent_config.get(
                 "target_update_interval",
                 "not_set"
-            )
-        ),
-        "target_class": "sports ball",
+            ),
+
+        "target_class":
+            "sports ball",
+
+        "reset_randomization":
+            reset_config.get(
+                "enabled",
+                False
+            ),
+
+        "reset_yaw_min_deg":
+            reset_config.get(
+                "yaw_offset_min_deg",
+                0.0
+            ),
+
+        "reset_yaw_max_deg":
+            reset_config.get(
+                "yaw_offset_max_deg",
+                0.0
+            ),
+
+        "reset_base_yaw":
+            reset_config.get(
+                "base_yaw",
+                1.5708
+            ),
     }
 
     mlflow.log_params(
@@ -367,24 +603,18 @@ def main():
     parser.add_argument(
         "--config",
         required=True,
-        help="Path to experiment YAML configuration"
+        help="Experiment YAML configuration"
     )
 
     args = parser.parse_args()
 
     # --------------------------------------------------------
-    # Configuration
+    # Config
     # --------------------------------------------------------
 
     config = load_config(
         args.config
     )
-
-    # Repository root:
-    # first/
-    #
-    # train.py is:
-    # first/src/train.py
 
     project_root = os.path.abspath(
         os.path.join(
@@ -402,12 +632,36 @@ def main():
     )
 
     # --------------------------------------------------------
-    # Experiment
+    # Experiment information
     # --------------------------------------------------------
 
-    experiment_name = config[
-        "experiment"
-    ]["name"]
+    experiment_config = (
+        config.get(
+            "experiment",
+            {}
+        )
+    )
+
+    experiment_name = (
+        experiment_config.get(
+            "name",
+            "robotics_rl"
+        )
+    )
+
+    run_name = (
+        experiment_config.get(
+            "run_name",
+            None
+        )
+    )
+
+    model_version = (
+        experiment_config.get(
+            "model_version",
+            "unknown"
+        )
+    )
 
     print()
     print(
@@ -423,6 +677,16 @@ def main():
     print(
         "Experiment:",
         experiment_name
+    )
+
+    print(
+        "Run:",
+        run_name
+    )
+
+    print(
+        "Model version:",
+        model_version
     )
 
     # --------------------------------------------------------
@@ -457,11 +721,18 @@ def main():
     # Environment
     # --------------------------------------------------------
 
-    action_duration = config[
-        "training"
-    ].get(
-        "action_duration",
-        0.1
+    training_config = (
+        config.get(
+            "training",
+            {}
+        )
+    )
+
+    action_duration = (
+        training_config.get(
+            "action_duration",
+            0.1
+        )
     )
 
     env = TurtlebotEnv(
@@ -487,23 +758,36 @@ def main():
     # Paths
     # --------------------------------------------------------
 
-    model_path = config[
+    paths = config[
         "paths"
-    ]["model"]
+    ]
 
-    replay_path = config[
-        "paths"
-    ]["replay_buffer"]
+    model_path = (
+        paths[
+            "model"
+        ]
+    )
 
-    reward_log_path = config[
-        "paths"
-    ]["reward_log"]
+    replay_path = (
+        paths[
+            "replay_buffer"
+        ]
+    )
 
-    model_directory = os.path.dirname(
-        model_path
+    reward_log_path = (
+        paths[
+            "reward_log"
+        ]
+    )
+
+    model_directory = (
+        os.path.dirname(
+            model_path
+        )
     )
 
     if model_directory:
+
         os.makedirs(
             model_directory,
             exist_ok=True
@@ -513,17 +797,21 @@ def main():
     # Replay buffer
     # --------------------------------------------------------
 
-    replay_capacity = config.get(
-        "replay_buffer",
-        {}
-    ).get(
-        "capacity",
-        100000
+    replay_capacity = (
+        config.get(
+            "replay_buffer",
+            {}
+        ).get(
+            "capacity",
+            100000
+        )
     )
 
-    replay_buffer = load_replay_buffer(
-        replay_path,
-        replay_capacity
+    replay_buffer = (
+        load_replay_buffer(
+            replay_path,
+            replay_capacity
+        )
     )
 
     print(
@@ -532,13 +820,15 @@ def main():
     )
 
     # --------------------------------------------------------
-    # Load checkpoint
+    # Resume V2 only if V2 checkpoint exists
     # --------------------------------------------------------
 
     if os.path.exists(
         model_path
     ):
+
         try:
+
             agent.load(
                 model_path
             )
@@ -549,30 +839,37 @@ def main():
             )
 
         except Exception as error:
+
             print(
                 "Could not load model checkpoint:",
                 error
             )
 
+    else:
+
+        print(
+            "Starting with a fresh model."
+        )
+
     # --------------------------------------------------------
-    # Training configuration
+    # Training settings
     # --------------------------------------------------------
 
-    training_config = config[
-        "training"
-    ]
-
-    episodes = training_config.get(
-        "episodes",
-        30
+    episodes = (
+        training_config.get(
+            "episodes",
+            500
+        )
     )
 
-    batch_size = training_config.get(
-        "batch_size",
-        32
+    batch_size = (
+        training_config.get(
+            "batch_size",
+            32
+        )
     )
 
-    max_steps_per_episode = (
+    max_steps = (
         training_config.get(
             "max_steps_per_episode",
             200
@@ -582,7 +879,7 @@ def main():
     checkpoint_interval = (
         training_config.get(
             "checkpoint_interval",
-            10
+            25
         )
     )
 
@@ -602,7 +899,6 @@ def main():
         project_root
     )
 
-    # Running success counter
     successful_episodes = 0
 
     training_start_time = (
@@ -613,7 +909,9 @@ def main():
     # MLflow run
     # ========================================================
 
-    with mlflow.start_run() as run:
+    with mlflow.start_run(
+        run_name=run_name
+    ) as run:
 
         print()
         print(
@@ -626,49 +924,92 @@ def main():
             experiment_name
         )
 
-        print()
+        # ----------------------------------------------------
+        # Tags
+        # ----------------------------------------------------
+
+        mlflow.set_tags(
+            {
+                "model_version":
+                    model_version,
+
+                "training_distribution":
+                    "random_yaw",
+
+                "goal":
+                    "two_sided_object_centering",
+
+                "status":
+                    "candidate",
+
+                "previous_model":
+                    "fixed_start_v1",
+
+                "previous_issue":
+                    "one_direction_policy",
+
+                "change_reason":
+                    "randomized yaw was added "
+                    "to expose left and right "
+                    "target states",
+            }
+        )
+
+        # ----------------------------------------------------
+        # Parameters
+        # ----------------------------------------------------
 
         log_mlflow_parameters(
             config,
             task,
             episodes,
             batch_size,
-            max_steps_per_episode
+            max_steps
         )
 
-        # Save experiment configuration immediately
+        # ----------------------------------------------------
+        # Save config immediately
+        # ----------------------------------------------------
+
         if os.path.exists(
             args.config
         ):
+
             mlflow.log_artifact(
                 args.config,
                 artifact_path="config"
             )
 
         # ====================================================
-        # Main episode loop
+        # Episode loop
         # ====================================================
 
         for episode in range(
             episodes
         ):
 
-            # ------------------------------------------------
-            # IMPORTANT:
-            # reset Gazebo every episode
-            # ------------------------------------------------
-
-            state = env.reset()
+            (
+                state,
+                reset_yaw,
+                reset_yaw_offset_deg
+            ) = reset_environment(
+                env,
+                config
+            )
 
             if state is None:
+
                 rospy.logwarn(
-                    "Environment reset returned no state."
+                    "Environment reset returned "
+                    "no state."
                 )
 
                 continue
 
             total_reward = 0.0
+
             step_count = 0
+
             done = False
 
             episode_losses = []
@@ -677,28 +1018,31 @@ def main():
                 time.time()
             )
 
-            # ================================================
+            # =================================================
             # Step loop
-            # ================================================
+            # =================================================
 
             while (
                 not done
-                and step_count
-                < max_steps_per_episode
-                and not rospy.is_shutdown()
+                and
+                step_count < max_steps
+                and
+                not rospy.is_shutdown()
             ):
 
-                # --------------------------------------------
-                # Action selection
-                # --------------------------------------------
+                # ---------------------------------------------
+                # Select action
+                # ---------------------------------------------
 
-                action = agent.select_action(
-                    state
+                action = (
+                    agent.select_action(
+                        state
+                    )
                 )
 
-                # --------------------------------------------
-                # Environment step
-                # --------------------------------------------
+                # ---------------------------------------------
+                # Environment
+                # ---------------------------------------------
 
                 (
                     next_state,
@@ -709,11 +1053,12 @@ def main():
                 )
 
                 if next_state is None:
+
                     continue
 
-                # --------------------------------------------
-                # Replay memory
-                # --------------------------------------------
+                # ---------------------------------------------
+                # Replay buffer
+                # ---------------------------------------------
 
                 replay_buffer.push(
                     state,
@@ -723,20 +1068,22 @@ def main():
                     done
                 )
 
-                # --------------------------------------------
-                # DQN training
-                # --------------------------------------------
+                # ---------------------------------------------
+                # Train
+                # ---------------------------------------------
 
                 if (
                     len(replay_buffer)
                     >= batch_size
                 ):
+
                     loss = agent.train(
                         replay_buffer,
                         batch_size
                     )
 
                     if loss is not None:
+
                         episode_losses.append(
                             float(loss)
                         )
@@ -747,9 +1094,9 @@ def main():
 
                 step_count += 1
 
-                # --------------------------------------------
+                # ---------------------------------------------
                 # Terminal progress
-                # --------------------------------------------
+                # ---------------------------------------------
 
                 if (
                     step_count
@@ -772,15 +1119,18 @@ def main():
                     print(
                         f"Episode {episode} | "
                         f"Step {step_count}/"
-                        f"{max_steps_per_episode} | "
-                        f"Reward {total_reward:.2f} | "
-                        f"Epsilon {agent.epsilon:.3f} | "
-                        f"Speed {speed:.2f} steps/s"
+                        f"{max_steps} | "
+                        f"Reward "
+                        f"{total_reward:.2f} | "
+                        f"Epsilon "
+                        f"{agent.epsilon:.3f} | "
+                        f"Speed "
+                        f"{speed:.2f} steps/s"
                     )
 
-            # ================================================
-            # Episode complete
-            # ================================================
+            # =================================================
+            # Episode finished
+            # =================================================
 
             env.robot.stop()
 
@@ -797,17 +1147,18 @@ def main():
             )
 
             average_loss = (
-                sum(episode_losses)
-                / len(episode_losses)
+                sum(
+                    episode_losses
+                )
+                / len(
+                    episode_losses
+                )
                 if episode_losses
                 else 0.0
             )
 
-            # ------------------------------------------------
-            # Success statistics
-            # ------------------------------------------------
-
             if done:
+
                 successful_episodes += 1
 
                 print(
@@ -816,11 +1167,11 @@ def main():
                 )
 
             else:
+
                 print(
-                    f"Episode {episode} ended because "
-                    f"maximum step limit "
-                    f"({max_steps_per_episode}) "
-                    f"was reached."
+                    f"Episode {episode} ended "
+                    f"because maximum step limit "
+                    f"({max_steps}) was reached."
                 )
 
             success_rate_running = (
@@ -834,21 +1185,22 @@ def main():
                 f"Steps: {step_count} | "
                 f"Reward: {total_reward:.2f} | "
                 f"Time: {episode_time:.2f}s | "
-                f"Speed: {steps_per_second:.2f} "
+                f"Speed: "
+                f"{steps_per_second:.2f} "
                 f"steps/s"
             )
 
-            # ------------------------------------------------
-            # System metrics
-            # ------------------------------------------------
+            # -------------------------------------------------
+            # System monitoring
+            # -------------------------------------------------
 
             system_metrics = (
                 get_system_metrics()
             )
 
-            # ------------------------------------------------
+            # -------------------------------------------------
             # MLflow metrics
-            # ------------------------------------------------
+            # -------------------------------------------------
 
             mlflow.log_metric(
                 "reward",
@@ -898,6 +1250,23 @@ def main():
                 step=episode
             )
 
+            if (
+                reset_yaw
+                is not None
+            ):
+
+                mlflow.log_metric(
+                    "reset_yaw_rad",
+                    reset_yaw,
+                    step=episode
+                )
+
+            mlflow.log_metric(
+                "reset_yaw_offset_deg",
+                reset_yaw_offset_deg,
+                step=episode
+            )
+
             for (
                 metric_name,
                 metric_value
@@ -909,9 +1278,9 @@ def main():
                     step=episode
                 )
 
-            # ------------------------------------------------
-            # CSV log
-            # ------------------------------------------------
+            # -------------------------------------------------
+            # CSV
+            # -------------------------------------------------
 
             append_episode_log(
                 reward_log_path,
@@ -922,19 +1291,20 @@ def main():
                 agent.epsilon,
                 average_loss,
                 episode_time,
-                steps_per_second
+                steps_per_second,
+                reset_yaw,
+                reset_yaw_offset_deg
             )
 
-            # ------------------------------------------------
-            # Epsilon decay
-            # ONCE per episode
-            # ------------------------------------------------
+            # -------------------------------------------------
+            # Epsilon decay ONCE per episode
+            # -------------------------------------------------
 
             agent.decay_epsilon()
 
-            # ------------------------------------------------
+            # -------------------------------------------------
             # Checkpoint
-            # ------------------------------------------------
+            # -------------------------------------------------
 
             if (
                 (episode + 1)
@@ -957,7 +1327,7 @@ def main():
                 )
 
         # ====================================================
-        # Training complete
+        # Training finished
         # ====================================================
 
         env.robot.stop()
@@ -968,7 +1338,7 @@ def main():
         )
 
         # ----------------------------------------------------
-        # Final model
+        # Final save
         # ----------------------------------------------------
 
         agent.save(
@@ -1009,6 +1379,7 @@ def main():
         if os.path.exists(
             model_path
         ):
+
             mlflow.log_artifact(
                 model_path,
                 artifact_path="models"
@@ -1017,6 +1388,7 @@ def main():
         if os.path.exists(
             replay_path
         ):
+
             mlflow.log_artifact(
                 replay_path,
                 artifact_path="replay_buffer"
@@ -1025,6 +1397,7 @@ def main():
         if os.path.exists(
             reward_log_path
         ):
+
             mlflow.log_artifact(
                 reward_log_path,
                 artifact_path="logs"
@@ -1066,4 +1439,5 @@ def main():
 
 
 if __name__ == "__main__":
+
     main()

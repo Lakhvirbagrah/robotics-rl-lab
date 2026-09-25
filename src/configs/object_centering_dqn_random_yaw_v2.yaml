@@ -1,0 +1,66 @@
+experiment:
+  name: object_centering_dqn
+  run_name: random_yaw_dqn_v2
+  model_version: v2
+
+
+task:
+  name: object_centering
+
+  center_target: 0.5
+  tolerance: 0.05
+
+
+algorithm:
+  name: dqn
+
+
+training:
+  episodes: 500
+
+  batch_size: 32
+
+  checkpoint_interval: 25
+
+  max_steps_per_episode: 200
+
+  log_interval_steps: 20
+
+  action_duration: 0.10
+
+  reset_randomization:
+    enabled: true
+
+    x: -2.46246
+    y: -5.46862
+
+    base_yaw: 1.5708
+
+    yaw_offset_min_deg: -45.0
+    yaw_offset_max_deg: -5.0
+
+
+agent:
+  gamma: 0.99
+
+  learning_rate: 0.001
+
+  epsilon_start: 1.0
+
+  epsilon_min: 0.05
+
+  epsilon_decay: 0.995
+
+  target_update_interval: 100
+
+
+replay_buffer:
+  capacity: 100000
+
+
+paths:
+  model: models/object_centering_dqn_random_yaw_v2.pth
+
+  replay_buffer: memory/object_centering_dqn_random_yaw_v2.pkl
+
+  reward_log: logs/object_centering_dqn_random_yaw_v2.csv

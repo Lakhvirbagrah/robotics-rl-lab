@@ -10,7 +10,7 @@ from std_msgs.msg import Float32MultiArray
 from cv_bridge import CvBridge
 
 
-SHOW_YOLO_WINDOW = False
+SHOW_YOLO_WINDOW = True
 TARGET_CLASS = "sports ball"
 
 bridge = CvBridge()
