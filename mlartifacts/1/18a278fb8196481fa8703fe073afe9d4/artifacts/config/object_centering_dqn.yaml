@@ -10,7 +10,7 @@ algorithm:
   name: dqn
 
 training:
-  episodes: 500
+  episodes: 3
   batch_size: 32
   checkpoint_interval: 10
   max_steps_per_episode: 200

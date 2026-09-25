@@ -1,19 +1,57 @@
 from agents.dqn import Agent
 
 
-def create_agent(config, task):
-    algorithm_name = config["algorithm"]["name"]
+def create_agent(
+    config,
+    task
+):
+    algorithm_name = config[
+        "algorithm"
+    ]["name"].lower()
 
     if algorithm_name == "dqn":
-        return Agent(
-            state_dim=task.get_state_dim(),
-            action_dim=task.get_action_dim(),
-            gamma=config["agent"]["gamma"],
-            epsilon=config["agent"]["epsilon_start"],
-            epsilon_min=config["agent"]["epsilon_min"],
-            epsilon_decay=config["agent"]["epsilon_decay"],
-            lr=config["agent"]["learning_rate"],
-            target_update_interval=config["agent"]["target_update_interval"]
+
+        agent_config = config.get(
+            "agent",
+            {}
         )
 
-    raise ValueError(f"Unknown algorithm: {algorithm_name}")
+        return Agent(
+            state_dim=task.get_state_dim(),
+
+            action_dim=task.get_action_dim(),
+
+            gamma=agent_config.get(
+                "gamma",
+                0.99
+            ),
+
+            learning_rate=agent_config.get(
+                "learning_rate",
+                0.001
+            ),
+
+            epsilon_start=agent_config.get(
+                "epsilon_start",
+                1.0
+            ),
+
+            epsilon_min=agent_config.get(
+                "epsilon_min",
+                0.05
+            ),
+
+            epsilon_decay=agent_config.get(
+                "epsilon_decay",
+                0.995
+            ),
+
+            target_update_interval=agent_config.get(
+                "target_update_interval",
+                100
+            )
+        )
+
+    raise ValueError(
+        f"Unsupported algorithm: {algorithm_name}"
+    )
